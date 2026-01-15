@@ -372,17 +372,9 @@ st.markdown("""
         font-size: 16px !important;
     }
     
-    /* Selectbox - evitar texto cortado y hacerlo visible */
+    /* Selectbox - centrar texto verticalmente */
     .stSelectbox > div > div {
         border-radius: 12px !important;
-    }
-    
-    .stSelectbox > div > div > div {
-        font-size: 14px !important;
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: unset !important;
-        color: #1C1C1E !important;
     }
     
     .stSelectbox [data-baseweb="select"] {
@@ -390,28 +382,39 @@ st.markdown("""
     }
     
     .stSelectbox [data-baseweb="select"] > div {
-        white-space: normal !important;
-        overflow: visible !important;
-        min-height: 44px !important;
-        padding: 8px 12px !important;
-        color: #1C1C1E !important;
+        min-height: 48px !important;
+        padding: 0 12px !important;
+        display: flex !important;
+        align-items: center !important;
     }
     
-    /* Texto seleccionado visible */
+    /* Centrar el texto dentro del contenedor */
     .stSelectbox [data-baseweb="select"] > div > div {
-        color: #1C1C1E !important;
-        opacity: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        height: 100% !important;
+        line-height: normal !important;
     }
     
     .stSelectbox [data-baseweb="select"] > div > div > div {
-        color: #1C1C1E !important;
-        opacity: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        line-height: 1.4 !important;
     }
     
-    /* Valor placeholder y seleccionado */
-    div[data-baseweb="select"] span {
-        color: #1C1C1E !important;
-        opacity: 1 !important;
+    /* Asegurar que el valor seleccionado esté centrado */
+    [data-baseweb="select"] > div:first-child {
+        display: flex !important;
+        align-items: center !important;
+    }
+    
+    [data-baseweb="select"] > div:first-child > div {
+        display: flex !important;
+        align-items: center !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
     }
     
     /* Radio buttons horizontales */
