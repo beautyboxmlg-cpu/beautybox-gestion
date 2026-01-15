@@ -45,9 +45,17 @@ st.markdown("""
     .main .block-container {
         padding-top: 1rem;
         padding-bottom: 100px;
-        padding-left: 1rem;
-        padding-right: 1rem;
-        max-width: 500px;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+        max-width: 100%;
+        width: 100%;
+    }
+    
+    @media (min-width: 576px) {
+        .main .block-container {
+            max-width: 540px;
+            margin: 0 auto;
+        }
     }
     
     /* Header estilo iOS */
@@ -356,12 +364,46 @@ st.markdown("""
     
     /* Ajustes para inputs de Streamlit */
     .stTextInput > div > div > input,
-    .stSelectbox > div > div > div,
     .stNumberInput > div > div > input,
     .stDateInput > div > div > input {
         border-radius: 12px !important;
         border: 1px solid #E5E5EA !important;
         padding: 12px !important;
+        font-size: 16px !important;
+    }
+    
+    /* Selectbox - evitar texto cortado */
+    .stSelectbox > div > div {
+        border-radius: 12px !important;
+    }
+    
+    .stSelectbox > div > div > div {
+        font-size: 14px !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+    }
+    
+    .stSelectbox [data-baseweb="select"] {
+        font-size: 14px !important;
+    }
+    
+    .stSelectbox [data-baseweb="select"] > div {
+        white-space: normal !important;
+        overflow: visible !important;
+        min-height: 44px !important;
+        padding: 8px 12px !important;
+    }
+    
+    /* Radio buttons horizontales */
+    .stRadio > div {
+        flex-direction: row !important;
+        gap: 16px !important;
+        flex-wrap: wrap !important;
+    }
+    
+    .stRadio label {
+        font-size: 14px !important;
     }
     
     .stButton > button {
@@ -416,6 +458,29 @@ st.markdown("""
         color: white;
         font-size: 0.9rem;
         font-weight: 500;
+    }
+    
+    /* Botones de navegación inferior */
+    div[data-testid="stHorizontalBlock"]:last-of-type button {
+        background: white !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 8px 4px !important;
+        font-size: 0.7rem !important;
+        font-weight: 600 !important;
+        color: #8E8E93 !important;
+        box-shadow: none !important;
+        white-space: pre-line !important;
+        line-height: 1.3 !important;
+    }
+    
+    div[data-testid="stHorizontalBlock"]:last-of-type button:hover {
+        background: #F2F2F7 !important;
+        color: #007AFF !important;
+    }
+    
+    div[data-testid="stHorizontalBlock"]:last-of-type button:active {
+        color: #007AFF !important;
     }
     
     /* DataFrames mejorados */
@@ -703,23 +768,6 @@ if 'pagina' not in st.session_state:
     st.session_state.pagina = 'dashboard'
 
 # ============================================
-# HEADER
-# ============================================
-
-# Logo de BeautyBox (usando el estilo de tu web)
-st.markdown("""
-<div class="app-header">
-    <div style="width: 45px; height: 45px; border: 2px solid #d4a5a5; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #c48b9f; text-align: center; line-height: 1.1;">
-        Beauty<br>Box
-    </div>
-    <div class="app-header-text">
-        <h1>Dashboard</h1>
-        <p>BeautyBox</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ============================================
 # OBTENER DATOS GLOBALES
 # ============================================
 
@@ -732,45 +780,96 @@ solicitudes = get_solicitudes()
 pendientes = len(solicitudes[solicitudes['estado'] == 'pendiente']) if len(solicitudes) > 0 else 0
 
 # ============================================
-# NAVEGACIÓN INFERIOR
+# NAVEGACIÓN INFERIOR (FUNCIONAL)
 # ============================================
 
-def render_bottom_nav():
-    pagina_actual = st.session_state.pagina
+# CSS adicional para los botones de navegación
+st.markdown("""
+<style>
+    /* Contenedor de navegación inferior */
+    .nav-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        border-top: 1px solid #E5E5EA;
+        padding: 8px 0 20px 0;
+        z-index: 1000;
+    }
     
-    badge_html = f'<span class="badge">{pendientes}</span>' if pendientes > 0 else ''
+    /* Estilo para botones de navegación */
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] > div > div > div > div > button {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 8px 4px !important;
+        min-height: 60px !important;
+    }
     
-    st.markdown(f"""
-    <div class="bottom-nav">
-        <div class="bottom-nav-container">
-            <div class="nav-item {'active' if pagina_actual == 'dashboard' else 'inactive'}" onclick="window.location.href='?page=dashboard'">
-                <span class="nav-icon">📊</span>
-                <span class="nav-label">Dashboard</span>
-            </div>
-            <div class="nav-item {'active' if pagina_actual == 'solicitudes' else 'inactive'}" onclick="window.location.href='?page=solicitudes'">
-                <span class="nav-icon">📋</span>
-                <span class="nav-label">Solicitudes{badge_html}</span>
-            </div>
-            <div class="nav-item {'active' if pagina_actual == 'clientes' else 'inactive'}" onclick="window.location.href='?page=clientes'">
-                <span class="nav-icon">👥</span>
-                <span class="nav-label">Clientes</span>
-            </div>
-            <div class="nav-item {'active' if pagina_actual == 'servicios' else 'inactive'}" onclick="window.location.href='?page=servicios'">
-                <span class="nav-icon">💅</span>
-                <span class="nav-label">Servicios</span>
-            </div>
-            <div class="nav-item {'active' if pagina_actual == 'config' else 'inactive'}" onclick="window.location.href='?page=config'">
-                <span class="nav-icon">⚙️</span>
-                <span class="nav-label">Config</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] > div > div > div > div > button:hover {
+        background: #F2F2F7 !important;
+    }
+    
+    /* Ocultar el borde del botón */
+    .nav-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .nav-btn .icon {
+        font-size: 1.4rem;
+    }
+    
+    .nav-btn .label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .nav-btn.active .label {
+        color: #007AFF;
+    }
+    
+    .nav-btn.inactive .label {
+        color: #8E8E93;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Leer parámetros de URL para navegación
-query_params = st.query_params
-if 'page' in query_params:
-    st.session_state.pagina = query_params['page']
+def cambiar_pagina(nueva_pagina):
+    st.session_state.pagina = nueva_pagina
+
+# ============================================
+# HEADER
+# ============================================
+
+pagina_actual = st.session_state.pagina
+
+# Títulos por página
+titulos = {
+    'dashboard': 'Dashboard',
+    'solicitudes': 'Solicitudes',
+    'clientes': 'Clientes', 
+    'servicios': 'Servicios',
+    'registrar': 'Registrar Cita',
+    'gastos': 'Gastos',
+    'config': 'Configuración'
+}
+
+st.markdown(f"""
+<div class="app-header">
+    <div style="width: 45px; height: 45px; border: 2px solid #d4a5a5; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #c48b9f; text-align: center; line-height: 1.1;">
+        Beauty<br>Box
+    </div>
+    <div class="app-header-text">
+        <h1>{titulos.get(pagina_actual, 'Dashboard')}</h1>
+        <p>BeautyBox</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ============================================
 # CONTENIDO PRINCIPAL
@@ -883,7 +982,7 @@ elif pagina == 'registrar':
             # Servicio
             servicio_opciones = servicios[['id', 'nombre', 'precio', 'categoria_nombre']].copy()
             servicio_opciones['display'] = servicio_opciones.apply(
-                lambda x: f"{x['categoria_nombre']} - {x['nombre']} (€{x['precio']})", axis=1
+                lambda x: f"{x['nombre']} - €{x['precio']}", axis=1
             )
             servicio_sel = st.selectbox("💅 Servicio", options=servicio_opciones['id'].tolist(),
                 format_func=lambda x: servicio_opciones[servicio_opciones['id']==x]['display'].values[0])
@@ -1189,6 +1288,36 @@ elif pagina == 'config':
     """, unsafe_allow_html=True)
 
 # ============================================
-# RENDERIZAR NAVEGACIÓN INFERIOR
+# NAVEGACIÓN INFERIOR CON BOTONES
 # ============================================
-render_bottom_nav()
+
+st.markdown("---")
+
+# Crear columnas para los botones de navegación
+col1, col2, col3, col4, col5 = st.columns(5)
+
+with col1:
+    if st.button("📊\nDashboard", key="nav_dashboard", use_container_width=True):
+        st.session_state.pagina = 'dashboard'
+        st.rerun()
+
+with col2:
+    badge = f" ({pendientes})" if pendientes > 0 else ""
+    if st.button(f"📋\nSolicitudes{badge}", key="nav_solicitudes", use_container_width=True):
+        st.session_state.pagina = 'solicitudes'
+        st.rerun()
+
+with col3:
+    if st.button("👥\nClientes", key="nav_clientes", use_container_width=True):
+        st.session_state.pagina = 'clientes'
+        st.rerun()
+
+with col4:
+    if st.button("💅\nServicios", key="nav_servicios", use_container_width=True):
+        st.session_state.pagina = 'servicios'
+        st.rerun()
+
+with col5:
+    if st.button("⚙️\nConfig", key="nav_config", use_container_width=True):
+        st.session_state.pagina = 'config'
+        st.rerun()
