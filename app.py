@@ -967,6 +967,11 @@ if pagina == 'dashboard':
 
 # ---------- REGISTRAR CITA ----------
 elif pagina == 'registrar':
+    # Botón volver
+    if st.button("← Volver al Dashboard", key="volver_registrar"):
+        st.session_state.pagina = 'dashboard'
+        st.rerun()
+    
     st.markdown('<h2 class="section-title">📝 Registrar Cita</h2>', unsafe_allow_html=True)
     
     servicios = get_servicios()
@@ -1164,6 +1169,11 @@ elif pagina == 'servicios':
 
 # ---------- GASTOS ----------
 elif pagina == 'gastos':
+    # Botón volver
+    if st.button("← Volver al Dashboard", key="volver_gastos"):
+        st.session_state.pagina = 'dashboard'
+        st.rerun()
+    
     st.markdown('<h2 class="section-title">💰 Gastos</h2>', unsafe_allow_html=True)
     
     gastos_fijos = get_gastos_fijos()
@@ -1291,33 +1301,35 @@ elif pagina == 'config':
 # NAVEGACIÓN INFERIOR CON BOTONES
 # ============================================
 
-st.markdown("---")
-
-# Crear columnas para los botones de navegación
-col1, col2, col3, col4, col5 = st.columns(5)
-
-with col1:
-    if st.button("📊\nDashboard", key="nav_dashboard", use_container_width=True):
-        st.session_state.pagina = 'dashboard'
-        st.rerun()
-
-with col2:
-    badge = f" ({pendientes})" if pendientes > 0 else ""
-    if st.button(f"📋\nSolicitudes{badge}", key="nav_solicitudes", use_container_width=True):
-        st.session_state.pagina = 'solicitudes'
-        st.rerun()
-
-with col3:
-    if st.button("👥\nClientes", key="nav_clientes", use_container_width=True):
-        st.session_state.pagina = 'clientes'
-        st.rerun()
-
-with col4:
-    if st.button("💅\nServicios", key="nav_servicios", use_container_width=True):
-        st.session_state.pagina = 'servicios'
-        st.rerun()
-
-with col5:
-    if st.button("⚙️\nConfig", key="nav_config", use_container_width=True):
-        st.session_state.pagina = 'config'
-        st.rerun()
+# Solo mostrar navegación en páginas principales (no en registrar/gastos que tienen formularios)
+if pagina not in ['registrar', 'gastos']:
+    st.markdown("---")
+    
+    # Crear columnas para los botones de navegación
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        if st.button("📊\nDashboard", key="nav_dashboard", use_container_width=True):
+            st.session_state.pagina = 'dashboard'
+            st.rerun()
+    
+    with col2:
+        badge = f" ({pendientes})" if pendientes > 0 else ""
+        if st.button(f"📋\nSolicitudes{badge}", key="nav_solicitudes", use_container_width=True):
+            st.session_state.pagina = 'solicitudes'
+            st.rerun()
+    
+    with col3:
+        if st.button("👥\nClientes", key="nav_clientes", use_container_width=True):
+            st.session_state.pagina = 'clientes'
+            st.rerun()
+    
+    with col4:
+        if st.button("💅\nServicios", key="nav_servicios", use_container_width=True):
+            st.session_state.pagina = 'servicios'
+            st.rerun()
+    
+    with col5:
+        if st.button("⚙️\nConfig", key="nav_config", use_container_width=True):
+            st.session_state.pagina = 'config'
+            st.rerun()
