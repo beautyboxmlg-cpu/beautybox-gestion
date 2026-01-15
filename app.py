@@ -372,7 +372,7 @@ st.markdown("""
         font-size: 16px !important;
     }
     
-    /* Selectbox - evitar texto cortado */
+    /* Selectbox - evitar texto cortado y hacerlo visible */
     .stSelectbox > div > div {
         border-radius: 12px !important;
     }
@@ -382,6 +382,7 @@ st.markdown("""
         white-space: normal !important;
         overflow: visible !important;
         text-overflow: unset !important;
+        color: #1C1C1E !important;
     }
     
     .stSelectbox [data-baseweb="select"] {
@@ -393,6 +394,24 @@ st.markdown("""
         overflow: visible !important;
         min-height: 44px !important;
         padding: 8px 12px !important;
+        color: #1C1C1E !important;
+    }
+    
+    /* Texto seleccionado visible */
+    .stSelectbox [data-baseweb="select"] > div > div {
+        color: #1C1C1E !important;
+        opacity: 1 !important;
+    }
+    
+    .stSelectbox [data-baseweb="select"] > div > div > div {
+        color: #1C1C1E !important;
+        opacity: 1 !important;
+    }
+    
+    /* Valor placeholder y seleccionado */
+    div[data-baseweb="select"] span {
+        color: #1C1C1E !important;
+        opacity: 1 !important;
     }
     
     /* Radio buttons horizontales */
