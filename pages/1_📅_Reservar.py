@@ -1,12 +1,13 @@
 """
-BeautyBox Málaga - Formulario Público de Reservas
-Esta página es para que los clientes soliciten citas
+BeautyBox Málaga - Formulario de Reserva Público
+Página para clientes que quieren solicitar una cita
 """
 
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
+import pandas as pd
 
 # ============================================
 # CONFIGURACIÓN DE LA PÁGINA
@@ -19,46 +20,176 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Ocultar sidebar y menú
+# ============================================
+# ESTILOS CSS
+# ============================================
+
 st.markdown("""
 <style>
-    [data-testid="stSidebar"] {display: none;}
+    /* Ocultar elementos de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display: none;}
+    [data-testid="stSidebar"] {display: none;}
     
-    .main-header {
-        font-size: 2.5rem;
+    /* Fondo y contenedor */
+    .stApp {
+        background: linear-gradient(135deg, #FDF8F7 0%, #FFFFFF 100%);
+    }
+    
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 480px;
+    }
+    
+    /* Header del formulario */
+    .booking-header {
+        text-align: center;
+        padding: 20px 0;
+        margin-bottom: 20px;
+    }
+    
+    .booking-header .logo {
+        width: 80px;
+        height: 80px;
+        border: 2px solid #d4a5a5;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+        font-size: 0.8rem;
+        color: #c48b9f;
+        background: white;
+    }
+    
+    .booking-header h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #2D2D2D;
+        margin: 0 0 4px 0;
+    }
+    
+    .booking-header p {
+        font-size: 0.9rem;
+        color: #8E8E93;
+        margin: 0;
+    }
+    
+    /* Tarjeta del formulario */
+    .form-card {
+        background: white;
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+    }
+    
+    .form-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #2D2D2D;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    /* Campos del formulario */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stTextArea > div > div > textarea {
+        border-radius: 12px !important;
+        border: 1.5px solid #E5E5EA !important;
+        padding: 14px !important;
+        font-size: 1rem !important;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #d4a5a5 !important;
+        box-shadow: 0 0 0 3px rgba(212, 165, 165, 0.1) !important;
+    }
+    
+    /* Botón de envío */
+    .stButton > button {
+        background: linear-gradient(135deg, #d4a5a5 0%, #c48b9f 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 14px !important;
+        padding: 16px 32px !important;
+        font-size: 1.05rem !important;
+        font-weight: 600 !important;
+        width: 100% !important;
+        box-shadow: 0 4px 15px rgba(196, 139, 159, 0.4) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(196, 139, 159, 0.5) !important;
+    }
+    
+    /* Mensaje de éxito */
+    .success-message {
+        background: linear-gradient(135deg, #D4EDDA 0%, #C3E6CB 100%);
+        border-radius: 16px;
+        padding: 24px;
+        text-align: center;
+        margin: 20px 0;
+    }
+    
+    .success-message .icon {
+        font-size: 3rem;
+        margin-bottom: 12px;
+    }
+    
+    .success-message h2 {
+        color: #155724;
+        font-size: 1.3rem;
+        margin: 0 0 8px 0;
+    }
+    
+    .success-message p {
+        color: #155724;
+        font-size: 0.95rem;
+        margin: 0;
+    }
+    
+    /* Info de contacto */
+    .contact-info {
+        background: #F8F9FA;
+        border-radius: 16px;
+        padding: 20px;
+        text-align: center;
+        margin-top: 24px;
+    }
+    
+    .contact-info h3 {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #6C757D;
+        margin: 0 0 12px 0;
+    }
+    
+    .contact-info a {
         color: #d4a5a5;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .contact-info a:hover {
+        text-decoration: underline;
+    }
+    
+    /* Footer */
+    .booking-footer {
         text-align: center;
-        margin-bottom: 0;
-    }
-    .sub-header {
-        font-size: 1rem;
-        color: #666;
-        text-align: center;
-        margin-top: 0;
-        margin-bottom: 2rem;
-    }
-    .success-box {
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        border-radius: 10px;
-        padding: 2rem;
-        text-align: center;
-        margin: 2rem 0;
-    }
-    .info-box {
-        background-color: #fff3cd;
-        border: 1px solid #ffeaa7;
-        border-radius: 10px;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-    .beautybox-form {
-        background: linear-gradient(135deg, #f9f7f5 0%, #fff 100%);
-        padding: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        padding: 20px 0;
+        color: #ADB5BD;
+        font-size: 0.8rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -69,226 +200,142 @@ st.markdown("""
 
 @st.cache_resource
 def get_google_connection():
-    """Conectar a Google Sheets"""
     try:
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
-        
         credentials = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
             scopes=scopes
         )
-        
         client = gspread.authorize(credentials)
         return client
     except Exception as e:
         st.error(f"Error de conexión: {e}")
-        return None
+        st.stop()
 
-def get_servicios_disponibles():
-    """Obtener lista de servicios para el formulario"""
+@st.cache_resource
+def get_spreadsheet():
+    client = get_google_connection()
     try:
-        client = get_google_connection()
-        if not client:
-            return []
-        
-        spreadsheet = client.open("BeautyBox_Database")
+        return client.open("BeautyBox_Database")
+    except:
+        st.error("Error conectando a la base de datos")
+        st.stop()
+
+def get_servicios():
+    spreadsheet = get_spreadsheet()
+    try:
         worksheet = spreadsheet.worksheet('servicios')
         data = worksheet.get_all_records()
-        
-        # Filtrar solo servicios activos
-        servicios = [row for row in data if row.get('activo') == 1]
-        
-        # Formatear para mostrar
-        opciones = []
-        for s in servicios:
-            precio = s.get('precio', 0)
-            nombre = s.get('nombre', '')
-            opciones.append(f"{nombre} - €{precio}")
-        
-        return opciones
+        df = pd.DataFrame(data) if data else pd.DataFrame()
+        if len(df) > 0:
+            df = df[df['activo'] == 1]
+        return df
     except:
-        # Si hay error, devolver lista predefinida
-        return [
-            "Extensiones de pestañas clásicas - €50",
-            "Extensiones de Pestañas 2D - €65",
-            "Extensiones de Pestañas Híbridas - €55",
-            "Extensiones de Pestañas 3D - €80",
-            "Volumen Ruso - €80",
-            "Lifting de Pestañas con tinte - €50",
-            "Microblading o Nanoblading - €200",
-            "Micropigmentación de Cejas - €200",
-            "Laminado de Cejas - €45",
-            "Diseño de Cejas con Henna - €35",
-            "Depilación con hilo - €10",
-            "Micropigmentación de Labios - €250",
-            "Micropigmentación de Ojos - €220",
-            "Manicura Rusa con Nivelación - €25"
-        ]
+        return pd.DataFrame()
 
-def guardar_solicitud(nombre, telefono, email, servicio, preferencia, mensaje):
-    """Guardar solicitud en Google Sheets"""
+def insertar_solicitud(nombre, telefono, email, servicio, preferencia, mensaje):
+    spreadsheet = get_spreadsheet()
+    headers = ['id', 'nombre', 'telefono', 'email', 'servicio_solicitado', 'preferencia_horario', 
+               'mensaje', 'estado', 'fecha_solicitud', 'fecha_respuesta', 'notas_admin']
+    
     try:
-        client = get_google_connection()
-        if not client:
-            return False
-        
-        spreadsheet = client.open("BeautyBox_Database")
-        
-        # Obtener o crear hoja de solicitudes
-        try:
-            worksheet = spreadsheet.worksheet('solicitudes')
-        except:
-            headers = ['id', 'nombre', 'telefono', 'email', 'servicio_solicitado', 
-                      'preferencia_horario', 'mensaje', 'estado', 'fecha_solicitud', 
-                      'fecha_respuesta', 'notas_admin']
-            worksheet = spreadsheet.add_worksheet(title='solicitudes', rows=1000, cols=20)
-            worksheet.append_row(headers)
-        
-        # Obtener siguiente ID
-        data = worksheet.get_all_records()
-        next_id = max([row.get('id', 0) for row in data], default=0) + 1
-        
-        # Guardar solicitud
-        row = [
-            next_id,
-            nombre,
-            telefono,
-            email,
-            servicio,
-            preferencia,
-            mensaje,
-            'pendiente',
-            datetime.now().isoformat(),
-            '',
-            ''
-        ]
-        worksheet.append_row(row)
-        
-        return True
-    except Exception as e:
-        st.error(f"Error al guardar: {e}")
-        return False
+        worksheet = spreadsheet.worksheet('solicitudes')
+    except:
+        worksheet = spreadsheet.add_worksheet(title='solicitudes', rows=1000, cols=20)
+        worksheet.append_row(headers)
+    
+    data = worksheet.get_all_records()
+    new_id = max([row.get('id', 0) for row in data], default=0) + 1
+    
+    row = [new_id, nombre, telefono, email, servicio, preferencia, mensaje, 'pendiente', 
+           datetime.now().isoformat(), '', '']
+    worksheet.append_row(row)
+    return new_id
 
 # ============================================
-# INTERFAZ DEL FORMULARIO
+# FORMULARIO
 # ============================================
 
-# Logo y header
-st.markdown("<h1 class='main-header'>💅 BeautyBox Málaga</h1>", unsafe_allow_html=True)
-st.markdown("<p class='sub-header'>Solicita tu cita online</p>", unsafe_allow_html=True)
-
-# Mensaje informativo
+# Header
 st.markdown("""
-<div class='info-box'>
-    ⚠️ <strong>Importante:</strong> Esto es una <strong>solicitud de cita</strong>, no una confirmación automática. 
-    Te contactaremos por WhatsApp o teléfono para confirmar fecha y hora disponible.
+<div class="booking-header">
+    <div class="logo">Beauty<br>Box</div>
+    <h1>Reservar Cita</h1>
+    <p>Centro de Estética • Málaga</p>
 </div>
 """, unsafe_allow_html=True)
 
-# Verificar si ya se envió
+# Estado del formulario
 if 'solicitud_enviada' not in st.session_state:
     st.session_state.solicitud_enviada = False
 
 if st.session_state.solicitud_enviada:
+    # Mensaje de éxito
     st.markdown("""
-    <div class='success-box'>
-        <h2>✅ ¡Solicitud Recibida!</h2>
-        <p>Gracias por tu interés en BeautyBox Málaga.</p>
-        <p>Te contactaremos pronto por WhatsApp o teléfono para confirmar tu cita.</p>
-        <p><strong>📱 +34 642 84 19 32</strong></p>
+    <div class="success-message">
+        <div class="icon">✅</div>
+        <h2>¡Solicitud Enviada!</h2>
+        <p>Te contactaremos pronto para confirmar tu cita.</p>
     </div>
     """, unsafe_allow_html=True)
     
-    if st.button("📝 Hacer otra solicitud"):
+    if st.button("📝 Nueva Solicitud"):
         st.session_state.solicitud_enviada = False
         st.rerun()
-    
-    # Links de contacto
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.link_button("💬 WhatsApp Directo", 
-                      "https://wa.me/34642841932?text=Hola%20BeautyBox!%20Acabo%20de%20enviar%20una%20solicitud%20de%20cita.",
-                      use_container_width=True)
-    with col2:
-        st.link_button("🌐 Volver a la Web", 
-                      "https://beautyboxcentromalaga.com",
-                      use_container_width=True)
-
 else:
-    # Formulario de solicitud
-    with st.form("solicitud_cita"):
-        st.subheader("📋 Tus Datos")
+    # Formulario
+    servicios = get_servicios()
+    
+    with st.form("reserva_form"):
+        st.markdown('<div class="form-title">📋 Tus Datos</div>', unsafe_allow_html=True)
         
         nombre = st.text_input("Nombre completo *", placeholder="María García")
+        telefono = st.text_input("Teléfono *", placeholder="600 123 456")
+        email = st.text_input("Email", placeholder="tu@email.com")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            telefono = st.text_input("Teléfono/WhatsApp *", placeholder="+34 612 345 678")
-        with col2:
-            email = st.text_input("Email (opcional)", placeholder="tu@email.com")
+        st.markdown('<div class="form-title" style="margin-top: 20px;">💅 Servicio</div>', unsafe_allow_html=True)
         
-        st.markdown("---")
-        st.subheader("💅 Servicio Deseado")
+        if len(servicios) > 0:
+            servicio_nombres = servicios['nombre'].tolist()
+            servicio = st.selectbox("¿Qué servicio te interesa? *", options=servicio_nombres)
+        else:
+            servicio = st.selectbox("¿Qué servicio te interesa? *", 
+                options=["Extensiones de Pestañas", "Lifting de Pestañas", "Laminado de Cejas", 
+                        "Micropigmentación", "Manicura", "Pedicura", "Otro"])
         
-        servicios = get_servicios_disponibles()
-        servicio = st.selectbox("¿Qué servicio te interesa? *", servicios)
+        preferencia = st.selectbox("Preferencia de horario *",
+            options=["Mañana (9:00 - 13:00)", "Tarde (16:00 - 20:00)", "Flexible"])
         
-        st.markdown("---")
-        st.subheader("📅 Preferencia de Horario")
+        mensaje = st.text_area("Mensaje (opcional)", 
+            placeholder="¿Alguna preferencia o comentario?",
+            height=100)
         
-        preferencia = st.radio(
-            "¿Cuándo prefieres tu cita?",
-            [
-                "🌅 Mañanas (10:00 - 14:00)",
-                "🌆 Tardes (16:00 - 20:00)",
-                "📅 Día específico (indicar en mensaje)",
-                "🤷 Flexible - cualquier horario disponible"
-            ]
-        )
-        
-        mensaje = st.text_area(
-            "Mensaje adicional (opcional)",
-            placeholder="Ej: Prefiero los martes, es mi primera vez con extensiones, tengo alguna alergia...",
-            height=100
-        )
-        
-        st.markdown("---")
-        
-        # Botón de envío
-        submitted = st.form_submit_button("📤 Enviar Solicitud", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("📩 Enviar Solicitud")
         
         if submitted:
-            # Validaciones
-            if not nombre:
-                st.error("Por favor ingresa tu nombre")
-            elif not telefono:
-                st.error("Por favor ingresa tu teléfono")
-            elif len(telefono) < 9:
-                st.error("Por favor ingresa un teléfono válido")
+            if not nombre or not telefono:
+                st.error("Por favor completa los campos obligatorios (*)")
             else:
-                # Guardar solicitud
-                with st.spinner("Enviando solicitud..."):
-                    exito = guardar_solicitud(nombre, telefono, email, servicio, preferencia, mensaje)
-                
-                if exito:
-                    st.session_state.solicitud_enviada = True
-                    st.rerun()
-                else:
-                    st.error("Hubo un error. Por favor contacta directamente por WhatsApp.")
-                    st.link_button("💬 Contactar por WhatsApp", 
-                                  "https://wa.me/34642841932",
-                                  use_container_width=True)
+                insertar_solicitud(nombre, telefono, email, servicio, preferencia, mensaje)
+                st.session_state.solicitud_enviada = True
+                st.rerun()
+
+# Info de contacto
+st.markdown("""
+<div class="contact-info">
+    <h3>¿Prefieres contactarnos directamente?</h3>
+    <p>📱 WhatsApp: <a href="https://wa.me/34XXXXXXXXX">+34 XXX XXX XXX</a></p>
+    <p>📍 Málaga Centro</p>
+</div>
+""", unsafe_allow_html=True)
 
 # Footer
-st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: #666; font-size: 0.9rem;'>
-    <p>📍 Av. del Arroyo de los Ángeles, 5 - Málaga</p>
-    <p>📱 +34 642 84 19 32 | 📧 beautyboxmlg@gmail.com</p>
-    <p>© 2025 BeautyBox Málaga</p>
+<div class="booking-footer">
+    <p>© BeautyBox Málaga</p>
+    <p>Lashes & Brows</p>
 </div>
 """, unsafe_allow_html=True)
