@@ -936,12 +936,12 @@ if pagina == 'dashboard':
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📝 Registrar Cita", use_container_width=True, type="primary"):
-            st.query_params["page"] = "registrar"
+        if st.button("📝 Registrar Cita", use_container_width=True, type="primary", key="btn_registrar_cita"):
+            st.session_state.pagina = 'registrar'
             st.rerun()
     with col2:
-        if st.button("💰 Agregar Gasto", use_container_width=True):
-            st.query_params["page"] = "gastos"
+        if st.button("💰 Agregar Gasto", use_container_width=True, key="btn_agregar_gasto"):
+            st.session_state.pagina = 'gastos'
             st.rerun()
     
     # Gráfico si hay datos
