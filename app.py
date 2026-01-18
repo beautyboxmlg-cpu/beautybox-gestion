@@ -875,6 +875,12 @@ if 'pagina' not in st.session_state:
 if 'solicitud_confirmada' not in st.session_state:
     st.session_state.solicitud_confirmada = None
 
+if 'confirmar_eliminar_cita' not in st.session_state:
+    st.session_state.confirmar_eliminar_cita = None
+
+if 'editar_cita' not in st.session_state:
+    st.session_state.editar_cita = None
+
 # ============================================
 # OBTENER DATOS GLOBALES
 # ============================================
@@ -1109,14 +1115,20 @@ if pagina == 'dashboard':
 elif pagina == 'agenda':
     st.markdown('<h2 class="section-title">📅 Agenda</h2>', unsafe_allow_html=True)
     
+    # Inicializar estados
+    if 'confirmar_eliminar_cita' not in st.session_state:
+        st.session_state.confirmar_eliminar_cita = None
+    if 'editar_cita' not in st.session_state:
+        st.session_state.editar_cita = None
+    
     # Selector de vista
     vista = st.radio("Ver:", ["Hoy", "Esta semana", "Este mes"], horizontal=True)
     
     # Obtener todas las citas
     spreadsheet = get_spreadsheet()
     headers = ['id', 'fecha', 'hora', 'cliente_id', 'servicio_id', 'precio_cobrado', 'propina', 'canal_origen', 'metodo_pago', 'notas', 'created_at']
-    worksheet = get_or_create_worksheet(spreadsheet, 'citas', headers)
-    data = worksheet.get_all_records()
+    worksheet_citas = get_or_create_worksheet(spreadsheet, 'citas', headers)
+    data = worksheet_citas.get_all_records()
     citas_df = pd.DataFrame(data) if data else pd.DataFrame(columns=headers)
     
     if len(citas_df) == 0:
@@ -1172,6 +1184,8 @@ elif pagina == 'agenda':
                 citas_del_dia = citas_filtradas[citas_filtradas['fecha'].dt.date == fecha]
                 
                 for _, cita in citas_del_dia.iterrows():
+                    cita_id = int(cita['id'])
+                    
                     # Obtener nombre del cliente
                     cliente_nombre = "Cliente desconocido"
                     if len(clientes) > 0 and cita['cliente_id'] in clientes['id'].values:
@@ -1179,12 +1193,14 @@ elif pagina == 'agenda':
                     
                     # Obtener nombre del servicio
                     servicio_nombre = "Servicio"
-                    if len(servicios) > 0 and cita['servicio_id'] in servicios['id'].values:
-                        servicio_nombre = servicios[servicios['id'] == cita['servicio_id']]['nombre'].values[0]
+                    servicio_actual_id = cita['servicio_id']
+                    if len(servicios) > 0 and servicio_actual_id in servicios['id'].values:
+                        servicio_nombre = servicios[servicios['id'] == servicio_actual_id]['nombre'].values[0]
                     
                     hora_str = str(cita['hora'])[:5] if cita['hora'] else ''
                     precio = cita['precio_cobrado'] if cita['precio_cobrado'] else 0
                     
+                    # Mostrar tarjeta de cita
                     st.markdown(f"""
                     <div class="list-card">
                         <div class="list-item">
@@ -1199,6 +1215,112 @@ elif pagina == 'agenda':
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+                    
+                    # ===== MODO EDICIÓN =====
+                    if st.session_state.editar_cita == cita_id:
+                        st.markdown("**✏️ Editar Cita**")
+                        
+                        # Parsear fecha y hora actuales
+                        try:
+                            fecha_actual = cita['fecha'].date() if pd.notna(cita['fecha']) else hoy
+                        except:
+                            fecha_actual = hoy
+                        
+                        try:
+                            hora_parts = str(cita['hora']).split(':')
+                            hora_actual = datetime.strptime(f"{hora_parts[0]}:{hora_parts[1]}", "%H:%M").time()
+                        except:
+                            hora_actual = datetime.strptime("10:00", "%H:%M").time()
+                        
+                        col_f, col_h = st.columns(2)
+                        with col_f:
+                            nueva_fecha = st.date_input("📅 Fecha", value=fecha_actual, key=f"edit_fecha_{cita_id}")
+                        with col_h:
+                            nueva_hora = st.time_input("🕐 Hora", value=hora_actual, key=f"edit_hora_{cita_id}")
+                        
+                        # Selector de servicio
+                        if len(servicios) > 0:
+                            servicio_opciones = servicios[['id', 'nombre', 'precio']].copy()
+                            servicio_opciones['display'] = servicio_opciones.apply(
+                                lambda x: f"{x['nombre']} (€{x['precio']})", axis=1
+                            )
+                            
+                            # Encontrar índice del servicio actual
+                            try:
+                                idx_actual = servicio_opciones['id'].tolist().index(servicio_actual_id)
+                            except:
+                                idx_actual = 0
+                            
+                            nuevo_servicio_id = st.selectbox(
+                                "💅 Servicio", 
+                                options=servicio_opciones['id'].tolist(),
+                                index=idx_actual,
+                                format_func=lambda x: servicio_opciones[servicio_opciones['id']==x]['display'].values[0],
+                                key=f"edit_servicio_{cita_id}"
+                            )
+                            
+                            # Actualizar precio según servicio
+                            precio_sugerido = float(servicios[servicios['id']==nuevo_servicio_id]['precio'].values[0])
+                        else:
+                            nuevo_servicio_id = servicio_actual_id
+                            precio_sugerido = float(precio)
+                        
+                        nuevo_precio = st.number_input("💶 Precio (€)", value=precio_sugerido, min_value=0.0, key=f"edit_precio_{cita_id}")
+                        
+                        col_guardar, col_cancelar = st.columns(2)
+                        with col_guardar:
+                            if st.button("💾 Guardar", key=f"save_edit_{cita_id}", use_container_width=True):
+                                row_num = find_row_by_id(worksheet_citas, cita_id)
+                                if row_num:
+                                    # Actualizar: fecha, hora, servicio_id, precio
+                                    worksheet_citas.update(f'B{row_num}', [[str(nueva_fecha)]])
+                                    worksheet_citas.update(f'C{row_num}', [[str(nueva_hora)]])
+                                    worksheet_citas.update(f'E{row_num}', [[int(nuevo_servicio_id)]])
+                                    worksheet_citas.update(f'F{row_num}', [[float(nuevo_precio)]])
+                                st.session_state.editar_cita = None
+                                st.cache_data.clear()
+                                st.success("✅ Cita actualizada")
+                                st.rerun()
+                        with col_cancelar:
+                            if st.button("❌ Cancelar", key=f"cancel_edit_{cita_id}", use_container_width=True):
+                                st.session_state.editar_cita = None
+                                st.rerun()
+                    
+                    # ===== MODO CONFIRMAR ELIMINACIÓN =====
+                    elif st.session_state.confirmar_eliminar_cita == cita_id:
+                        st.warning(f"⚠️ ¿Seguro que quieres eliminar esta cita?")
+                        st.markdown(f"**{cliente_nombre}** - {servicio_nombre} - {fecha.strftime('%d/%m/%Y')} {hora_str}")
+                        
+                        col_si, col_no = st.columns(2)
+                        with col_si:
+                            if st.button("✅ Sí, eliminar", key=f"confirm_del_{cita_id}", use_container_width=True):
+                                row_num = find_row_by_id(worksheet_citas, cita_id)
+                                if row_num:
+                                    worksheet_citas.delete_rows(row_num)
+                                st.session_state.confirmar_eliminar_cita = None
+                                st.cache_data.clear()
+                                st.success("✅ Cita eliminada")
+                                st.rerun()
+                        with col_no:
+                            if st.button("❌ Cancelar", key=f"cancel_del_{cita_id}", use_container_width=True):
+                                st.session_state.confirmar_eliminar_cita = None
+                                st.rerun()
+                    
+                    # ===== BOTONES NORMALES =====
+                    else:
+                        col_edit, col_del = st.columns(2)
+                        with col_edit:
+                            if st.button("✏️ Editar", key=f"edit_{cita_id}", use_container_width=True):
+                                st.session_state.editar_cita = cita_id
+                                st.session_state.confirmar_eliminar_cita = None
+                                st.rerun()
+                        with col_del:
+                            if st.button("🗑️ Eliminar", key=f"del_{cita_id}", use_container_width=True):
+                                st.session_state.confirmar_eliminar_cita = cita_id
+                                st.session_state.editar_cita = None
+                                st.rerun()
+                    
+                    st.markdown("---")
 
 # ---------- REGISTRAR CITA ----------
 elif pagina == 'registrar':
