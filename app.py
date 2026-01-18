@@ -961,6 +961,7 @@ pagina_actual = st.session_state.pagina
 # Títulos por página
 titulos = {
     'dashboard': 'Dashboard',
+    'agenda': 'Agenda',  # NUEVO
     'solicitudes': 'Solicitudes',
     'clientes': 'Clientes', 
     'servicios': 'Servicios',
@@ -1103,6 +1104,101 @@ if pagina == 'dashboard':
             paper_bgcolor='white'
         )
         st.plotly_chart(fig, use_container_width=True)
+
+# ---------- AGENDA ----------
+elif pagina == 'agenda':
+    st.markdown('<h2 class="section-title">📅 Agenda</h2>', unsafe_allow_html=True)
+    
+    # Selector de vista
+    vista = st.radio("Ver:", ["Hoy", "Esta semana", "Este mes"], horizontal=True)
+    
+    # Obtener todas las citas
+    spreadsheet = get_spreadsheet()
+    headers = ['id', 'fecha', 'hora', 'cliente_id', 'servicio_id', 'precio_cobrado', 'propina', 'canal_origen', 'metodo_pago', 'notas', 'created_at']
+    worksheet = get_or_create_worksheet(spreadsheet, 'citas', headers)
+    data = worksheet.get_all_records()
+    citas_df = pd.DataFrame(data) if data else pd.DataFrame(columns=headers)
+    
+    if len(citas_df) == 0:
+        st.info("📅 No hay citas registradas")
+    else:
+        # Convertir fecha
+        citas_df['fecha'] = pd.to_datetime(citas_df['fecha'], errors='coerce')
+        
+        # Filtrar según vista
+        hoy = datetime.now().date()
+        
+        if vista == "Hoy":
+            citas_filtradas = citas_df[citas_df['fecha'].dt.date == hoy]
+            titulo_seccion = "Citas de Hoy"
+        elif vista == "Esta semana":
+            inicio_semana = hoy - timedelta(days=hoy.weekday())
+            fin_semana = inicio_semana + timedelta(days=6)
+            citas_filtradas = citas_df[
+                (citas_df['fecha'].dt.date >= inicio_semana) & 
+                (citas_df['fecha'].dt.date <= fin_semana)
+            ]
+            titulo_seccion = f"Citas de la Semana ({inicio_semana.strftime('%d/%m')} - {fin_semana.strftime('%d/%m')})"
+        else:  # Este mes
+            citas_filtradas = citas_df[
+                (citas_df['fecha'].dt.month == hoy.month) & 
+                (citas_df['fecha'].dt.year == hoy.year)
+            ]
+            titulo_seccion = f"Citas de {hoy.strftime('%B %Y')}"
+        
+        # Ordenar por fecha y hora
+        citas_filtradas = citas_filtradas.sort_values(['fecha', 'hora'])
+        
+        # Obtener info de clientes y servicios
+        clientes = get_clientes()
+        servicios = get_servicios()
+        
+        st.markdown(f'<p style="color: #8E8E93; font-size: 0.9rem; margin-bottom: 16px;">{titulo_seccion} • {len(citas_filtradas)} cita(s)</p>', unsafe_allow_html=True)
+        
+        if len(citas_filtradas) == 0:
+            st.success("🎉 No hay citas programadas para este período")
+        else:
+            # Agrupar por fecha
+            for fecha in citas_filtradas['fecha'].dt.date.unique():
+                fecha_str = fecha.strftime('%A %d de %B').capitalize()
+                es_hoy = fecha == hoy
+                
+                st.markdown(f"""
+                <p style="color: {'#007AFF' if es_hoy else '#8E8E93'}; font-size: 0.85rem; font-weight: 600; margin: 16px 0 8px 4px;">
+                    {'📍 HOY - ' if es_hoy else ''}{fecha_str}
+                </p>
+                """, unsafe_allow_html=True)
+                
+                citas_del_dia = citas_filtradas[citas_filtradas['fecha'].dt.date == fecha]
+                
+                for _, cita in citas_del_dia.iterrows():
+                    # Obtener nombre del cliente
+                    cliente_nombre = "Cliente desconocido"
+                    if len(clientes) > 0 and cita['cliente_id'] in clientes['id'].values:
+                        cliente_nombre = clientes[clientes['id'] == cita['cliente_id']]['nombre'].values[0]
+                    
+                    # Obtener nombre del servicio
+                    servicio_nombre = "Servicio"
+                    if len(servicios) > 0 and cita['servicio_id'] in servicios['id'].values:
+                        servicio_nombre = servicios[servicios['id'] == cita['servicio_id']]['nombre'].values[0]
+                    
+                    hora_str = str(cita['hora'])[:5] if cita['hora'] else ''
+                    precio = cita['precio_cobrado'] if cita['precio_cobrado'] else 0
+                    
+                    st.markdown(f"""
+                    <div class="list-card">
+                        <div class="list-item">
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #007AFF; min-width: 55px;">
+                                {hora_str}
+                            </div>
+                            <div class="list-item-content" style="margin-left: 12px;">
+                                <div class="list-item-title">{cliente_nombre}</div>
+                                <div class="list-item-subtitle">💅 {servicio_nombre}</div>
+                            </div>
+                            <div class="list-item-value">€{precio:.0f}</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
 # ---------- REGISTRAR CITA ----------
 elif pagina == 'registrar':
@@ -1648,7 +1744,7 @@ if pagina not in ['registrar', 'gastos']:
     st.markdown("---")
     
     # Crear columnas para los botones de navegación
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         if st.button("📊\nDashboard", key="nav_dashboard", use_container_width=True):
@@ -1656,22 +1752,27 @@ if pagina not in ['registrar', 'gastos']:
             st.rerun()
     
     with col2:
+        if st.button("📅\nAgenda", key="nav_agenda", use_container_width=True):
+            st.session_state.pagina = 'agenda'
+            st.rerun()
+    
+    with col3:
         badge = f" ({pendientes})" if pendientes > 0 else ""
         if st.button(f"📋\nSolicitudes{badge}", key="nav_solicitudes", use_container_width=True):
             st.session_state.pagina = 'solicitudes'
             st.rerun()
     
-    with col3:
+    with col4:
         if st.button("👥\nClientes", key="nav_clientes", use_container_width=True):
             st.session_state.pagina = 'clientes'
             st.rerun()
     
-    with col4:
+    with col5:
         if st.button("💅\nServicios", key="nav_servicios", use_container_width=True):
             st.session_state.pagina = 'servicios'
             st.rerun()
     
-    with col5:
+    with col6:
         if st.button("⚙️\nConfig", key="nav_config", use_container_width=True):
             st.session_state.pagina = 'config'
             st.rerun()
