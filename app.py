@@ -1013,15 +1013,15 @@ if pagina == 'dashboard':
         st.markdown('<h2 class="section-title">📅 Citas de Hoy</h2>', unsafe_allow_html=True)
         
         for _, cita in citas_hoy.iterrows():
-            hora_str = str(cita['hora'])[:5] if cita['hora'] else ''
+            hora_str = str(cita['hora'])[:5] if cita['hora'] else 'Sin hora'
             cliente_nom = cita.get('cliente_nombre', 'Sin nombre')
             servicio_nom = cita.get('servicio_nombre', 'Sin servicio')
-            
+
             st.markdown(f"""
             <div class="list-card">
                 <div class="list-item">
-                    <div style="font-size: 1.2rem; font-weight: 700; color: #007AFF; min-width: 60px;">
-                        {hora_str}
+                    <div style="font-size: 1.2rem; font-weight: 700; color: #007AFF; min-width: 70px; text-align: center;">
+                        🕐 {hora_str}
                     </div>
                     <div class="list-item-content" style="margin-left: 12px;">
                         <div class="list-item-title">{cliente_nom}</div>
@@ -1197,15 +1197,15 @@ elif pagina == 'agenda':
                     if len(servicios) > 0 and servicio_actual_id in servicios['id'].values:
                         servicio_nombre = servicios[servicios['id'] == servicio_actual_id]['nombre'].values[0]
                     
-                    hora_str = str(cita['hora'])[:5] if cita['hora'] else ''
+                    hora_str = str(cita['hora'])[:5] if cita['hora'] else 'Sin hora'
                     precio = cita['precio_cobrado'] if cita['precio_cobrado'] else 0
-                    
+
                     # Mostrar tarjeta de cita
                     st.markdown(f"""
                     <div class="list-card">
                         <div class="list-item">
-                            <div style="font-size: 1.1rem; font-weight: 700; color: #007AFF; min-width: 55px;">
-                                {hora_str}
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #007AFF; min-width: 65px; text-align: center;">
+                                🕐 {hora_str}
                             </div>
                             <div class="list-item-content" style="margin-left: 12px;">
                                 <div class="list-item-title">{cliente_nombre}</div>
@@ -1341,8 +1341,8 @@ elif pagina == 'registrar':
         tipo_cliente = st.radio("👤 Cliente", ["Existente", "Nuevo"], horizontal=True, key="tipo_cliente_radio")
 
         with st.form("form_cita"):
-            fecha_cita = st.date_input("📅 Fecha", datetime.now())
-            hora_cita = st.time_input("🕐 Hora", datetime.now().time())
+            fecha_cita = st.date_input("📅 Fecha de la cita", datetime.now())
+            hora_cita = st.time_input("🕐 Hora de la cita (programada)", datetime.strptime("10:00", "%H:%M").time())
 
             # Servicio
             servicio_opciones = servicios[['id', 'nombre', 'precio', 'categoria_nombre']].copy()
