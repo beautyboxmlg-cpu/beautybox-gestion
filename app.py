@@ -10,6 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import gspread
 from google.oauth2.service_account import Credentials
+from urllib.parse import quote
 
 # ============================================
 # CONFIGURACIÓN DE LA PÁGINA
@@ -789,6 +790,9 @@ def eliminar_cita(cita_id):
 if 'pagina' not in st.session_state:
     st.session_state.pagina = 'dashboard'
 
+if 'solicitud_confirmada' not in st.session_state:
+    st.session_state.solicitud_confirmada = None
+
 # ============================================
 # OBTENER DATOS GLOBALES
 # ============================================
@@ -892,6 +896,7 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
 
 # ============================================
 # CONTENIDO PRINCIPAL
@@ -1009,7 +1014,7 @@ elif pagina == 'registrar':
             # Servicio
             servicio_opciones = servicios[['id', 'nombre', 'precio', 'categoria_nombre']].copy()
             servicio_opciones['display'] = servicio_opciones.apply(
-                lambda x: f"{x['nombre']} - €{x['precio']}", axis=1
+                lambda x: f"{x['categoria_nombre']} - {x['nombre']} (€{x['precio']})", axis=1
             )
             servicio_sel = st.selectbox("💅 Servicio", options=servicio_opciones['id'].tolist(),
                 format_func=lambda x: servicio_opciones[servicio_opciones['id']==x]['display'].values[0])
@@ -1055,11 +1060,50 @@ elif pagina == 'registrar':
 elif pagina == 'solicitudes':
     st.markdown('<h2 class="section-title">📋 Solicitudes</h2>', unsafe_allow_html=True)
     
-    solicitudes = get_solicitudes()
+    # Forzar recarga de datos (sin caché para solicitudes)
+    spreadsheet = get_spreadsheet()
+    headers = ['id', 'nombre', 'telefono', 'email', 'servicio_solicitado', 'preferencia_horario', 
+               'mensaje', 'estado', 'fecha_solicitud', 'fecha_respuesta', 'notas_admin']
+    worksheet = get_or_create_worksheet(spreadsheet, 'solicitudes', headers)
+    data = worksheet.get_all_records()
+    solicitudes = pd.DataFrame(data) if data else pd.DataFrame(columns=headers)
     
-    tab1, tab2 = st.tabs(["⏳ Pendientes", "✅ Confirmadas"])
+    tab1, tab2, tab3 = st.tabs(["⏳ Pendientes", "✅ Confirmadas", "❌ Rechazadas"])
     
+    # ===== PESTAÑA PENDIENTES =====
     with tab1:
+        # Mostrar botón de WhatsApp si se acaba de confirmar una solicitud
+        if st.session_state.solicitud_confirmada:
+            sol_conf = st.session_state.solicitud_confirmada
+            st.success("✅ ¡Solicitud confirmada!")
+            
+            mensaje_wa = f"""¡Hola {sol_conf['nombre']}! 👋
+
+Tu cita en BeautyBox Málaga ha sido *CONFIRMADA* ✅
+
+📅 *Fecha:* {sol_conf['horario']}
+💅 *Servicio:* {sol_conf['servicio']}
+
+{f"📝 *Nota:* {sol_conf['comentario']}" if sol_conf['comentario'] else ""}
+
+📍 Dirección: [Tu dirección aquí]
+
+¡Te esperamos! 💕"""
+            
+            telefono_limpio = ''.join(filter(str.isdigit, str(sol_conf['telefono'])))
+            if not telefono_limpio.startswith('34'):
+                telefono_limpio = '34' + telefono_limpio
+            
+            wa_link = f"https://wa.me/{telefono_limpio}?text={quote(mensaje_wa)}"
+            
+            st.markdown(f'<a href="{wa_link}" target="_blank"><button style="background:#25D366;color:white;border:none;padding:12px 20px;border-radius:8px;font-weight:600;width:100%;cursor:pointer;margin-bottom:16px;">📱 Enviar WhatsApp al cliente</button></a>', unsafe_allow_html=True)
+            
+            if st.button("✓ Listo", key="clear_wa"):
+                st.session_state.solicitud_confirmada = None
+                st.rerun()
+            
+            st.markdown("---")
+        
         pendientes_df = solicitudes[solicitudes['estado'] == 'pendiente'] if len(solicitudes) > 0 else pd.DataFrame()
         
         if len(pendientes_df) == 0:
@@ -1070,34 +1114,111 @@ elif pagina == 'solicitudes':
                 <div class="request-card">
                     <div class="client-name">👤 {sol['nombre']}</div>
                     <div class="client-info">📱 {sol['telefono']}</div>
+                    <div class="client-info">📧 {sol['email']}</div>
                     <div class="client-info">💅 {sol['servicio_solicitado']}</div>
                     <div class="client-info">🕐 {sol['preferencia_horario']}</div>
                 </div>
                 """, unsafe_allow_html=True)
                 
+                # Opción para modificar fecha/hora
+                with st.expander(f"✏️ Modificar fecha/hora", expanded=False):
+                    col_fecha, col_hora = st.columns(2)
+                    with col_fecha:
+                        nueva_fecha = st.date_input("Nueva fecha", key=f"fecha_{sol['id']}")
+                    with col_hora:
+                        nueva_hora = st.time_input("Nueva hora", key=f"hora_{sol['id']}")
+                    
+                    if st.button("💾 Guardar cambios", key=f"save_{sol['id']}"):
+                        nuevo_horario = f"{nueva_fecha} a las {nueva_hora.strftime('%H:%M')}"
+                        # Actualizar en Google Sheets
+                        row_num = find_row_by_id(worksheet, sol['id'])
+                        if row_num:
+                            worksheet.update(f'F{row_num}', [[nuevo_horario]])
+                        st.success("✅ Fecha actualizada")
+                        st.rerun()
+                
+                # Campo de comentarios para el cliente
+                comentario = st.text_input("💬 Mensaje para el cliente (opcional)", 
+                                          key=f"comment_{sol['id']}", 
+                                          placeholder="Ej: Te esperamos, recuerda llegar 5 min antes")
+                
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("✅ Confirmar", key=f"conf_{sol['id']}", use_container_width=True):
-                        actualizar_solicitud(sol['id'], 'confirmada', '')
+                        # Actualizar estado
+                        row_num = find_row_by_id(worksheet, sol['id'])
+                        if row_num:
+                            fecha_respuesta = datetime.now().isoformat()
+                            worksheet.update(f'H{row_num}', [['confirmada']])
+                            worksheet.update(f'J{row_num}', [[fecha_respuesta]])
+                            worksheet.update(f'K{row_num}', [[comentario]])
+                        
+                        # Guardar datos para mostrar WhatsApp después del rerun
+                        st.session_state.solicitud_confirmada = {
+                            'nombre': sol['nombre'],
+                            'telefono': sol['telefono'],
+                            'servicio': sol['servicio_solicitado'],
+                            'horario': sol['preferencia_horario'],
+                            'comentario': comentario
+                        }
                         st.rerun()
+                
                 with col2:
                     if st.button("❌ Rechazar", key=f"rech_{sol['id']}", use_container_width=True):
-                        actualizar_solicitud(sol['id'], 'rechazada', '')
+                        row_num = find_row_by_id(worksheet, sol['id'])
+                        if row_num:
+                            fecha_respuesta = datetime.now().isoformat()
+                            worksheet.update(f'H{row_num}', [['rechazada']])
+                            worksheet.update(f'J{row_num}', [[fecha_respuesta]])
+                            worksheet.update(f'K{row_num}', [[comentario]])
+                        st.warning("Solicitud rechazada")
                         st.rerun()
+                
                 st.markdown("---")
     
+    # ===== PESTAÑA CONFIRMADAS =====
     with tab2:
         confirmadas_df = solicitudes[solicitudes['estado'] == 'confirmada'] if len(solicitudes) > 0 else pd.DataFrame()
-        if len(confirmadas_df) > 0:
+        
+        if len(confirmadas_df) == 0:
+            st.info("No hay solicitudes confirmadas")
+        else:
             for _, sol in confirmadas_df.iterrows():
                 st.markdown(f"""
                 <div class="request-card confirmed">
                     <div class="client-name">👤 {sol['nombre']}</div>
+                    <div class="client-info">📱 {sol['telefono']}</div>
+                    <div class="client-info">📧 {sol['email']}</div>
                     <div class="client-info">💅 {sol['servicio_solicitado']}</div>
+                    <div class="client-info">🕐 {sol['preferencia_horario']}</div>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # Botón para contactar por WhatsApp
+                telefono_limpio = ''.join(filter(str.isdigit, str(sol['telefono'])))
+                if not telefono_limpio.startswith('34'):
+                    telefono_limpio = '34' + telefono_limpio
+                wa_link = f"https://wa.me/{telefono_limpio}"
+                
+                st.markdown(f'<a href="{wa_link}" target="_blank" style="text-decoration:none;"><span style="color:#25D366;font-size:0.85rem;">📱 Contactar por WhatsApp</span></a>', unsafe_allow_html=True)
+                st.markdown("---")
+    
+    # ===== PESTAÑA RECHAZADAS =====
+    with tab3:
+        rechazadas_df = solicitudes[solicitudes['estado'] == 'rechazada'] if len(solicitudes) > 0 else pd.DataFrame()
+        
+        if len(rechazadas_df) == 0:
+            st.info("No hay solicitudes rechazadas")
         else:
-            st.info("No hay solicitudes confirmadas")
+            for _, sol in rechazadas_df.iterrows():
+                st.markdown(f"""
+                <div class="request-card" style="border-left-color: #FF3B30; opacity: 0.7;">
+                    <div class="client-name">👤 {sol['nombre']}</div>
+                    <div class="client-info">💅 {sol['servicio_solicitado']}</div>
+                    <div class="client-info">🕐 {sol['preferencia_horario']}</div>
+                    <div class="client-info" style="color: #FF3B30;">❌ Rechazada</div>
+                </div>
+                """, unsafe_allow_html=True)
 
 # ---------- CLIENTES ----------
 elif pagina == 'clientes':
