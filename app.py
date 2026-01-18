@@ -676,6 +676,67 @@ def get_solicitudes():
         df = df.sort_values('fecha_solicitud', ascending=False)
     return df
 
+def buscar_cliente_existente(telefono, email):
+    """Buscar si el cliente ya existe por teléfono o email"""
+    clientes = get_clientes()
+    if len(clientes) == 0:
+        return None
+    
+    # Buscar por teléfono (limpiando caracteres)
+    if telefono:
+        telefono_limpio = ''.join(filter(str.isdigit, str(telefono)))
+        for _, cl in clientes.iterrows():
+            tel_cliente = ''.join(filter(str.isdigit, str(cl['telefono'])))
+            if tel_cliente and tel_cliente == telefono_limpio:
+                return cl['id']
+    
+    # Buscar por email
+    if email:
+        email_lower = str(email).lower().strip()
+        for _, cl in clientes.iterrows():
+            if cl['email'] and str(cl['email']).lower().strip() == email_lower:
+                return cl['id']
+    
+    return None
+
+def get_citas_hoy():
+    """Obtener las citas programadas para hoy"""
+    spreadsheet = get_spreadsheet()
+    headers = ['id', 'fecha', 'hora', 'cliente_id', 'servicio_id', 'precio_cobrado', 'propina', 'canal_origen', 'metodo_pago', 'notas', 'created_at']
+    worksheet = get_or_create_worksheet(spreadsheet, 'citas', headers)
+    data = worksheet.get_all_records()
+    df = pd.DataFrame(data) if data else pd.DataFrame(columns=headers)
+    
+    if len(df) == 0:
+        return pd.DataFrame()
+    
+    # Filtrar por fecha de hoy
+    hoy = datetime.now().strftime('%Y-%m-%d')
+    df['fecha_str'] = df['fecha'].astype(str).str[:10]
+    df_hoy = df[df['fecha_str'] == hoy].copy()
+    
+    if len(df_hoy) == 0:
+        return pd.DataFrame()
+    
+    # Agregar info de cliente y servicio
+    clientes = get_clientes()
+    servicios = get_servicios()
+    
+    if len(clientes) > 0:
+        df_hoy = df_hoy.merge(clientes[['id', 'nombre']], left_on='cliente_id', right_on='id', 
+                             how='left', suffixes=('', '_cliente'))
+        df_hoy = df_hoy.rename(columns={'nombre': 'cliente_nombre'})
+    
+    if len(servicios) > 0:
+        df_hoy = df_hoy.merge(servicios[['id', 'nombre']], left_on='servicio_id', right_on='id', 
+                             how='left', suffixes=('', '_servicio'))
+        df_hoy = df_hoy.rename(columns={'nombre': 'servicio_nombre'})
+    
+    # Ordenar por hora
+    df_hoy = df_hoy.sort_values('hora')
+    
+    return df_hoy
+
 # ============================================
 # FUNCIONES DE INSERCIÓN
 # ============================================
@@ -915,17 +976,43 @@ if pagina == 'dashboard':
         </div>
         """, unsafe_allow_html=True)
     
-    # Obtener datos
+    # ===== CITAS DE HOY =====
+    citas_hoy = get_citas_hoy()
+    
+    if len(citas_hoy) > 0:
+        st.markdown('<h2 class="section-title">📅 Citas de Hoy</h2>', unsafe_allow_html=True)
+        
+        for _, cita in citas_hoy.iterrows():
+            hora_str = str(cita['hora'])[:5] if cita['hora'] else ''
+            cliente_nom = cita.get('cliente_nombre', 'Sin nombre')
+            servicio_nom = cita.get('servicio_nombre', 'Sin servicio')
+            
+            st.markdown(f"""
+            <div class="list-card">
+                <div class="list-item">
+                    <div style="font-size: 1.2rem; font-weight: 700; color: #007AFF; min-width: 60px;">
+                        {hora_str}
+                    </div>
+                    <div class="list-item-content" style="margin-left: 12px;">
+                        <div class="list-item-title">{cliente_nom}</div>
+                        <div class="list-item-subtitle">💅 {servicio_nom}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+    else:
+        st.markdown("""
+        <div style="background: #E8F5E9; border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center;">
+            <span style="color: #2E7D32;">📅 No hay citas programadas para hoy</span>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Obtener datos del mes
     citas = get_citas(fecha_inicio, fecha_fin)
     
     if len(citas) == 0:
-        # Banner de bienvenida
-        st.markdown("""
-        <div class="welcome-banner">
-            <p>¡Bienvenida! No hay datos registrados aún.<br>Ve a 'Registrar Cita' para comenzar.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
         ingresos = 0
         num_citas = 0
         ticket_prom = 0
@@ -937,6 +1024,8 @@ if pagina == 'dashboard':
         clientes_unicos = citas['cliente_id'].nunique()
     
     # Grid de métricas
+    st.markdown('<h2 class="section-title">📊 Resumen del Mes</h2>', unsafe_allow_html=True)
+    
     st.markdown(f"""
     <div class="metrics-grid">
         <div class="metric-card">
@@ -1145,7 +1234,62 @@ Tu cita en BeautyBox Málaga ha sido *CONFIRMADA* ✅
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("✅ Confirmar", key=f"conf_{sol['id']}", use_container_width=True):
-                        # Actualizar estado
+                        # 1. Buscar si el cliente ya existe
+                        cliente_id = buscar_cliente_existente(sol['telefono'], sol['email'])
+                        
+                        if cliente_id:
+                            st.info(f"📋 Cliente existente encontrado (ID: {cliente_id})")
+                        else:
+                            # Crear nuevo cliente
+                            cliente_id = insertar_cliente(
+                                sol['nombre'], 
+                                sol['telefono'], 
+                                sol['email'], 
+                                'Web',  # Canal de adquisición
+                                f"Solicitud #{sol['id']}"
+                            )
+                            st.success(f"✅ Nuevo cliente creado: {sol['nombre']}")
+                        
+                        # 2. Extraer fecha y hora de preferencia_horario
+                        # Formato esperado: "2026-01-19 a las 10:30"
+                        try:
+                            partes = str(sol['preferencia_horario']).split(' a las ')
+                            fecha_cita = partes[0] if len(partes) > 0 else datetime.now().strftime('%Y-%m-%d')
+                            hora_cita = partes[1] if len(partes) > 1 else '10:00'
+                        except:
+                            fecha_cita = datetime.now().strftime('%Y-%m-%d')
+                            hora_cita = '10:00'
+                        
+                        # 3. Buscar el servicio por nombre (o usar uno por defecto)
+                        servicios = get_servicios()
+                        servicio_id = 1  # Por defecto
+                        precio_servicio = 50  # Por defecto
+                        
+                        if len(servicios) > 0:
+                            # Buscar servicio que coincida con el nombre
+                            servicio_match = servicios[servicios['nombre'].str.contains(sol['servicio_solicitado'].split()[0], case=False, na=False)]
+                            if len(servicio_match) > 0:
+                                servicio_id = servicio_match.iloc[0]['id']
+                                precio_servicio = servicio_match.iloc[0]['precio']
+                            else:
+                                # Usar el primer servicio disponible
+                                servicio_id = servicios.iloc[0]['id']
+                                precio_servicio = servicios.iloc[0]['precio']
+                        
+                        # 4. Crear la cita
+                        insertar_cita(
+                            fecha_cita,
+                            hora_cita,
+                            cliente_id,
+                            servicio_id,
+                            precio_servicio,
+                            0,  # propina
+                            'Web',  # canal
+                            'Pendiente',  # método de pago (se actualiza después)
+                            f"Solicitud #{sol['id']} - {comentario}"
+                        )
+                        
+                        # 5. Actualizar estado de la solicitud
                         row_num = find_row_by_id(worksheet, sol['id'])
                         if row_num:
                             fecha_respuesta = datetime.now().isoformat()
@@ -1153,7 +1297,10 @@ Tu cita en BeautyBox Málaga ha sido *CONFIRMADA* ✅
                             worksheet.update(f'J{row_num}', [[fecha_respuesta]])
                             worksheet.update(f'K{row_num}', [[comentario]])
                         
-                        # Guardar datos para mostrar WhatsApp después del rerun
+                        # 6. Limpiar caché para reflejar cambios
+                        st.cache_resource.clear()
+                        
+                        # 7. Guardar datos para mostrar WhatsApp
                         st.session_state.solicitud_confirmada = {
                             'nombre': sol['nombre'],
                             'telefono': sol['telefono'],
