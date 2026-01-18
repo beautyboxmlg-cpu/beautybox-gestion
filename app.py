@@ -1839,15 +1839,20 @@ elif pagina == 'proyecciones':
         # Calcular costo de insumos de las citas
         if len(citas_mes) > 0:
             servicios_df = get_servicios()
-            if len(servicios_df) > 0:
-                citas_con_costo = citas_mes.merge(
-                    servicios_df[['id', 'costo_insumos']],
-                    left_on='servicio_id',
-                    right_on='id',
-                    how='left'
-                )
-                costo_insumos = citas_con_costo['costo_insumos'].sum()
-                gastos_mes += costo_insumos
+            if len(servicios_df) > 0 and 'costo_insumos' in servicios_df.columns:
+                try:
+                    citas_con_costo = citas_mes.merge(
+                        servicios_df[['id', 'costo_insumos']],
+                        left_on='servicio_id',
+                        right_on='id',
+                        how='left',
+                        suffixes=('', '_srv')
+                    )
+                    if 'costo_insumos' in citas_con_costo.columns:
+                        costo_insumos = citas_con_costo['costo_insumos'].fillna(0).sum()
+                        gastos_mes += costo_insumos
+                except Exception:
+                    pass
 
         beneficio_mes = ingresos_mes - gastos_mes
 
@@ -1878,14 +1883,19 @@ elif pagina == 'proyecciones':
 
     if len(citas_actual) > 0:
         servicios_df = get_servicios()
-        if len(servicios_df) > 0:
-            citas_con_costo = citas_actual.merge(
-                servicios_df[['id', 'costo_insumos']],
-                left_on='servicio_id',
-                right_on='id',
-                how='left'
-            )
-            gastos_actual += citas_con_costo['costo_insumos'].sum()
+        if len(servicios_df) > 0 and 'costo_insumos' in servicios_df.columns:
+            try:
+                citas_con_costo = citas_actual.merge(
+                    servicios_df[['id', 'costo_insumos']],
+                    left_on='servicio_id',
+                    right_on='id',
+                    how='left',
+                    suffixes=('', '_srv')
+                )
+                if 'costo_insumos' in citas_con_costo.columns:
+                    gastos_actual += citas_con_costo['costo_insumos'].fillna(0).sum()
+            except Exception:
+                pass
 
     beneficio_actual = ingresos_actual - gastos_actual
 
