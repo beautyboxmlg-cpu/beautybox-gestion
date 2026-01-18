@@ -561,6 +561,7 @@ def get_or_create_worksheet(spreadsheet, name, headers):
 # FUNCIONES DE DATOS
 # ============================================
 
+@st.cache_data(ttl=300)  # Cache por 5 minutos
 def get_categorias():
     spreadsheet = get_spreadsheet()
     headers = ['id', 'nombre', 'descripcion', 'created_at']
@@ -578,6 +579,7 @@ def get_categorias():
         data = worksheet.get_all_records()
     return pd.DataFrame(data)
 
+@st.cache_data(ttl=300)
 def get_servicios():
     spreadsheet = get_spreadsheet()
     headers = ['id', 'nombre', 'categoria_id', 'precio', 'duracion_minutos', 'costo_insumos', 'activo', 'descripcion', 'created_at']
@@ -594,6 +596,7 @@ def get_servicios():
             df = df.drop(columns=['id_cat'])
     return df
 
+@st.cache_data(ttl=60)  # Cache por 1 minuto
 def get_clientes():
     spreadsheet = get_spreadsheet()
     headers = ['id', 'nombre', 'telefono', 'email', 'fecha_primera_visita', 'canal_adquisicion', 'notas', 'created_at']
@@ -601,6 +604,7 @@ def get_clientes():
     data = worksheet.get_all_records()
     return pd.DataFrame(data) if data else pd.DataFrame(columns=headers)
 
+@st.cache_data(ttl=60)
 def get_citas(fecha_inicio=None, fecha_fin=None):
     spreadsheet = get_spreadsheet()
     headers = ['id', 'fecha', 'hora', 'cliente_id', 'servicio_id', 'precio_cobrado', 'propina', 'canal_origen', 'metodo_pago', 'notas', 'created_at']
@@ -643,6 +647,7 @@ def get_citas(fecha_inicio=None, fecha_fin=None):
         df = df.sort_values('fecha', ascending=False)
     return df
 
+@st.cache_data(ttl=300)
 def get_gastos_fijos():
     spreadsheet = get_spreadsheet()
     headers = ['id', 'concepto', 'monto', 'frecuencia', 'activo', 'notas', 'created_at']
@@ -653,6 +658,7 @@ def get_gastos_fijos():
         df = df[df['activo'] == 1]
     return df
 
+@st.cache_data(ttl=60)
 def get_gastos_variables(fecha_inicio=None, fecha_fin=None):
     spreadsheet = get_spreadsheet()
     headers = ['id', 'fecha', 'concepto', 'monto', 'categoria', 'notas', 'created_at']
@@ -665,6 +671,7 @@ def get_gastos_variables(fecha_inicio=None, fecha_fin=None):
                (df['fecha'] <= pd.to_datetime(fecha_fin))]
     return df
 
+@st.cache_data(ttl=30)  # Cache por 30 segundos (para ver cambios más rápido)
 def get_solicitudes():
     spreadsheet = get_spreadsheet()
     headers = ['id', 'nombre', 'telefono', 'email', 'servicio_solicitado', 'preferencia_horario', 
@@ -699,6 +706,7 @@ def buscar_cliente_existente(telefono, email):
     
     return None
 
+@st.cache_data(ttl=60)
 def get_citas_hoy():
     """Obtener las citas programadas para hoy"""
     spreadsheet = get_spreadsheet()
@@ -754,7 +762,7 @@ def insertar_servicio(nombre, categoria_id, precio, duracion, costo_insumos, des
     new_id = get_next_id(worksheet)
     row = [new_id, nombre, categoria_id, precio, duracion, costo_insumos, 1, descripcion, datetime.now().isoformat()]
     worksheet.append_row(row)
-    st.cache_resource.clear()
+    st.cache_data.clear()
 
 def insertar_cliente(nombre, telefono, email, canal, notas):
     spreadsheet = get_spreadsheet()
@@ -762,7 +770,7 @@ def insertar_cliente(nombre, telefono, email, canal, notas):
     new_id = get_next_id(worksheet)
     row = [new_id, nombre, telefono, email, datetime.now().strftime('%Y-%m-%d'), canal, notas, datetime.now().isoformat()]
     worksheet.append_row(row)
-    st.cache_resource.clear()
+    st.cache_data.clear()
     return new_id
 
 def insertar_cita(fecha, hora, cliente_id, servicio_id, precio, propina, canal, metodo_pago, notas):
@@ -784,7 +792,7 @@ def insertar_cita(fecha, hora, cliente_id, servicio_id, precio, propina, canal, 
         datetime.now().isoformat()
     ]
     worksheet.append_row(row)
-    st.cache_resource.clear()
+    st.cache_data.clear()
 
 def insertar_gasto_fijo(concepto, monto, frecuencia, notas):
     spreadsheet = get_spreadsheet()
@@ -792,7 +800,7 @@ def insertar_gasto_fijo(concepto, monto, frecuencia, notas):
     new_id = get_next_id(worksheet)
     row = [new_id, concepto, monto, frecuencia, 1, notas, datetime.now().isoformat()]
     worksheet.append_row(row)
-    st.cache_resource.clear()
+    st.cache_data.clear()
 
 def insertar_gasto_variable(fecha, concepto, monto, categoria, notas):
     spreadsheet = get_spreadsheet()
@@ -800,7 +808,7 @@ def insertar_gasto_variable(fecha, concepto, monto, categoria, notas):
     new_id = get_next_id(worksheet)
     row = [new_id, str(fecha), concepto, monto, categoria, notas, datetime.now().isoformat()]
     worksheet.append_row(row)
-    st.cache_resource.clear()
+    st.cache_data.clear()
 
 # ============================================
 # FUNCIONES DE ACTUALIZACIÓN
@@ -819,7 +827,7 @@ def actualizar_servicio(servicio_id, nombre, categoria_id, precio, duracion, cos
     row_num = find_row_by_id(worksheet, servicio_id)
     if row_num:
         worksheet.update(f'B{row_num}:H{row_num}', [[nombre, categoria_id, precio, duracion, costo_insumos, 1, descripcion]])
-    st.cache_resource.clear()
+    st.cache_data.clear()
 
 def eliminar_servicio(servicio_id):
     spreadsheet = get_spreadsheet()
@@ -827,7 +835,7 @@ def eliminar_servicio(servicio_id):
     row_num = find_row_by_id(worksheet, servicio_id)
     if row_num:
         worksheet.update(f'G{row_num}', [[0]])
-    st.cache_resource.clear()
+    st.cache_data.clear()
 
 def actualizar_solicitud(solicitud_id, estado, notas_admin):
     spreadsheet = get_spreadsheet()
@@ -835,7 +843,7 @@ def actualizar_solicitud(solicitud_id, estado, notas_admin):
     row_num = find_row_by_id(worksheet, solicitud_id)
     if row_num:
         worksheet.update(f'H{row_num}:K{row_num}', [[estado, datetime.now().isoformat(), notas_admin]])
-    st.cache_resource.clear()
+    st.cache_data.clear()
 
 def eliminar_cliente(cliente_id):
     citas = get_citas()
@@ -846,7 +854,7 @@ def eliminar_cliente(cliente_id):
     row_num = find_row_by_id(worksheet, cliente_id)
     if row_num:
         worksheet.delete_rows(row_num)
-    st.cache_resource.clear()
+    st.cache_data.clear()
     return True, 0
 
 def eliminar_cita(cita_id):
@@ -855,7 +863,7 @@ def eliminar_cita(cita_id):
     row_num = find_row_by_id(worksheet, cita_id)
     if row_num:
         worksheet.delete_rows(row_num)
-    st.cache_resource.clear()
+    st.cache_data.clear()
 
 # ============================================
 # ESTADO DE NAVEGACIÓN
@@ -1339,7 +1347,7 @@ Tu cita en BeautyBox Málaga ha sido *CONFIRMADA* ✅
                                 worksheet.update(f'K{row_num}', [[comentario if comentario else '']])
                             
                             # 6. Limpiar caché para reflejar cambios
-                            st.cache_resource.clear()
+                            st.cache_data.clear()
                             
                             # 7. Guardar datos para mostrar WhatsApp
                             st.session_state.solicitud_confirmada = {
@@ -1620,7 +1628,7 @@ elif pagina == 'config':
     # Botón refrescar
     st.markdown("---")
     if st.button("🔄 Actualizar Datos", use_container_width=True):
-        st.cache_resource.clear()
+        st.cache_data.clear()
         st.rerun()
     
     # Info
