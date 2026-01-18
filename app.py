@@ -769,7 +769,20 @@ def insertar_cita(fecha, hora, cliente_id, servicio_id, precio, propina, canal, 
     spreadsheet = get_spreadsheet()
     worksheet = spreadsheet.worksheet('citas')
     new_id = get_next_id(worksheet)
-    row = [new_id, str(fecha), str(hora), cliente_id, servicio_id, precio, propina, canal, metodo_pago, notas, datetime.now().isoformat()]
+    # Convertir todos los valores a tipos nativos de Python para evitar errores de serialización
+    row = [
+        int(new_id), 
+        str(fecha), 
+        str(hora), 
+        int(cliente_id), 
+        int(servicio_id), 
+        float(precio), 
+        float(propina), 
+        str(canal), 
+        str(metodo_pago), 
+        str(notas), 
+        datetime.now().isoformat()
+    ]
     worksheet.append_row(row)
     st.cache_resource.clear()
 
@@ -858,9 +871,11 @@ if 'solicitud_confirmada' not in st.session_state:
 # OBTENER DATOS GLOBALES
 # ============================================
 
-# Filtros de fecha (usando el mes actual)
+# Filtros de fecha (usando el mes actual completo)
 fecha_inicio = datetime.now().replace(day=1).date()
-fecha_fin = datetime.now().date()
+# Último día del mes
+siguiente_mes = datetime.now().replace(day=28) + timedelta(days=4)
+fecha_fin = (siguiente_mes - timedelta(days=siguiente_mes.day)).date()
 
 # Contar solicitudes pendientes
 solicitudes = get_solicitudes()
@@ -1234,81 +1249,110 @@ Tu cita en BeautyBox Málaga ha sido *CONFIRMADA* ✅
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("✅ Confirmar", key=f"conf_{sol['id']}", use_container_width=True):
-                        # 1. Buscar si el cliente ya existe
-                        cliente_id = buscar_cliente_existente(sol['telefono'], sol['email'])
-                        
-                        if cliente_id:
-                            st.info(f"📋 Cliente existente encontrado (ID: {cliente_id})")
-                        else:
-                            # Crear nuevo cliente
-                            cliente_id = insertar_cliente(
-                                sol['nombre'], 
-                                sol['telefono'], 
-                                sol['email'], 
-                                'Web',  # Canal de adquisición
-                                f"Solicitud #{sol['id']}"
-                            )
-                            st.success(f"✅ Nuevo cliente creado: {sol['nombre']}")
-                        
-                        # 2. Extraer fecha y hora de preferencia_horario
-                        # Formato esperado: "2026-01-19 a las 10:30"
                         try:
-                            partes = str(sol['preferencia_horario']).split(' a las ')
-                            fecha_cita = partes[0] if len(partes) > 0 else datetime.now().strftime('%Y-%m-%d')
-                            hora_cita = partes[1] if len(partes) > 1 else '10:00'
-                        except:
-                            fecha_cita = datetime.now().strftime('%Y-%m-%d')
-                            hora_cita = '10:00'
-                        
-                        # 3. Buscar el servicio por nombre (o usar uno por defecto)
-                        servicios = get_servicios()
-                        servicio_id = 1  # Por defecto
-                        precio_servicio = 50  # Por defecto
-                        
-                        if len(servicios) > 0:
-                            # Buscar servicio que coincida con el nombre
-                            servicio_match = servicios[servicios['nombre'].str.contains(sol['servicio_solicitado'].split()[0], case=False, na=False)]
-                            if len(servicio_match) > 0:
-                                servicio_id = servicio_match.iloc[0]['id']
-                                precio_servicio = servicio_match.iloc[0]['precio']
+                            # 1. Buscar si el cliente ya existe
+                            cliente_id = buscar_cliente_existente(sol['telefono'], sol['email'])
+                            
+                            if cliente_id:
+                                pass  # Cliente existente
                             else:
-                                # Usar el primer servicio disponible
-                                servicio_id = servicios.iloc[0]['id']
-                                precio_servicio = servicios.iloc[0]['precio']
-                        
-                        # 4. Crear la cita
-                        insertar_cita(
-                            fecha_cita,
-                            hora_cita,
-                            cliente_id,
-                            servicio_id,
-                            precio_servicio,
-                            0,  # propina
-                            'Web',  # canal
-                            'Pendiente',  # método de pago (se actualiza después)
-                            f"Solicitud #{sol['id']} - {comentario}"
-                        )
-                        
-                        # 5. Actualizar estado de la solicitud
-                        row_num = find_row_by_id(worksheet, sol['id'])
-                        if row_num:
-                            fecha_respuesta = datetime.now().isoformat()
-                            worksheet.update(f'H{row_num}', [['confirmada']])
-                            worksheet.update(f'J{row_num}', [[fecha_respuesta]])
-                            worksheet.update(f'K{row_num}', [[comentario]])
-                        
-                        # 6. Limpiar caché para reflejar cambios
-                        st.cache_resource.clear()
-                        
-                        # 7. Guardar datos para mostrar WhatsApp
-                        st.session_state.solicitud_confirmada = {
-                            'nombre': sol['nombre'],
-                            'telefono': sol['telefono'],
-                            'servicio': sol['servicio_solicitado'],
-                            'horario': sol['preferencia_horario'],
-                            'comentario': comentario
-                        }
-                        st.rerun()
+                                # Crear nuevo cliente
+                                cliente_id = insertar_cliente(
+                                    sol['nombre'], 
+                                    sol['telefono'], 
+                                    sol['email'], 
+                                    'Web',
+                                    f"Solicitud #{sol['id']}"
+                                )
+                            
+                            # 2. Extraer fecha y hora de preferencia_horario
+                            try:
+                                partes = str(sol['preferencia_horario']).split(' a las ')
+                                fecha_cita = partes[0].strip() if len(partes) > 0 else datetime.now().strftime('%Y-%m-%d')
+                                hora_cita = partes[1].strip() if len(partes) > 1 else '10:00'
+                            except:
+                                fecha_cita = datetime.now().strftime('%Y-%m-%d')
+                                hora_cita = '10:00'
+                            
+                            # 3. Buscar el servicio por nombre
+                            servicios = get_servicios()
+                            servicio_id = None
+                            precio_servicio = 50  # Por defecto
+                            
+                            if len(servicios) > 0:
+                                # Buscar servicio que coincida con el nombre
+                                servicio_solicitado = str(sol['servicio_solicitado'])
+                                
+                                # Intentar match exacto primero
+                                servicio_match = servicios[servicios['nombre'].str.lower() == servicio_solicitado.lower()]
+                                
+                                # Si no hay match exacto, buscar parcial
+                                if len(servicio_match) == 0:
+                                    palabras = servicio_solicitado.split()
+                                    for palabra in palabras:
+                                        if len(palabra) > 3:  # Ignorar palabras cortas
+                                            servicio_match = servicios[servicios['nombre'].str.contains(palabra, case=False, na=False)]
+                                            if len(servicio_match) > 0:
+                                                break
+                                
+                                # Si encontró match, usar ese servicio
+                                if len(servicio_match) > 0:
+                                    servicio_id = int(servicio_match.iloc[0]['id'])
+                                    precio_servicio = float(servicio_match.iloc[0]['precio'])
+                                else:
+                                    # Usar el primer servicio disponible
+                                    servicio_id = int(servicios.iloc[0]['id'])
+                                    precio_servicio = float(servicios.iloc[0]['precio'])
+                            else:
+                                # NO HAY SERVICIOS - Crear uno por defecto
+                                st.warning("⚠️ No hay servicios. Creando servicio por defecto...")
+                                insertar_servicio(
+                                    sol['servicio_solicitado'],  # nombre
+                                    1,  # categoria_id (Pestañas)
+                                    50,  # precio
+                                    60,  # duracion
+                                    5,   # costo_insumos
+                                    "Creado automáticamente"
+                                )
+                                servicio_id = 1
+                                precio_servicio = 50
+                            
+                            # 4. Crear la cita
+                            insertar_cita(
+                                fecha_cita,
+                                hora_cita,
+                                cliente_id,
+                                servicio_id,
+                                precio_servicio,
+                                0,  # propina
+                                'Web',  # canal
+                                'Pendiente',  # método de pago
+                                f"Solicitud #{sol['id']} - {comentario if comentario else ''}"
+                            )
+                            
+                            # 5. Actualizar estado de la solicitud
+                            row_num = find_row_by_id(worksheet, sol['id'])
+                            if row_num:
+                                fecha_respuesta = datetime.now().isoformat()
+                                worksheet.update(f'H{row_num}', [['confirmada']])
+                                worksheet.update(f'J{row_num}', [[fecha_respuesta]])
+                                worksheet.update(f'K{row_num}', [[comentario if comentario else '']])
+                            
+                            # 6. Limpiar caché para reflejar cambios
+                            st.cache_resource.clear()
+                            
+                            # 7. Guardar datos para mostrar WhatsApp
+                            st.session_state.solicitud_confirmada = {
+                                'nombre': sol['nombre'],
+                                'telefono': sol['telefono'],
+                                'servicio': sol['servicio_solicitado'],
+                                'horario': sol['preferencia_horario'],
+                                'comentario': comentario if comentario else ''
+                            }
+                            st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"❌ Error al confirmar: {str(e)}")
                 
                 with col2:
                     if st.button("❌ Rechazar", key=f"rech_{sol['id']}", use_container_width=True):
