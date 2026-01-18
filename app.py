@@ -967,12 +967,13 @@ pagina_actual = st.session_state.pagina
 # Títulos por página
 titulos = {
     'dashboard': 'Dashboard',
-    'agenda': 'Agenda',  # NUEVO
+    'agenda': 'Agenda',
     'solicitudes': 'Solicitudes',
-    'clientes': 'Clientes', 
+    'clientes': 'Clientes',
     'servicios': 'Servicios',
     'registrar': 'Registrar Cita',
     'gastos': 'Gastos',
+    'proyecciones': 'Proyecciones',
     'config': 'Configuración'
 }
 
@@ -1730,11 +1731,6 @@ elif pagina == 'servicios':
 
 # ---------- GASTOS ----------
 elif pagina == 'gastos':
-    # Botón volver
-    if st.button("← Volver al Dashboard", key="volver_gastos"):
-        st.session_state.pagina = 'dashboard'
-        st.rerun()
-    
     st.markdown('<h2 class="section-title">💰 Gastos</h2>', unsafe_allow_html=True)
     
     gastos_fijos = get_gastos_fijos()
@@ -1813,6 +1809,265 @@ elif pagina == 'gastos':
                     st.success("✅ Guardado")
                     st.rerun()
 
+# ---------- PROYECCIONES FINANCIERAS ----------
+elif pagina == 'proyecciones':
+    st.markdown('<h2 class="section-title">📈 Proyecciones Financieras</h2>', unsafe_allow_html=True)
+
+    # Obtener datos históricos
+    hoy = datetime.now()
+
+    # Datos de los últimos 3 meses
+    meses_datos = []
+    for i in range(3, 0, -1):
+        mes_fecha = hoy - timedelta(days=30*i)
+        inicio_mes = mes_fecha.replace(day=1)
+        if mes_fecha.month == 12:
+            fin_mes = mes_fecha.replace(day=31)
+        else:
+            siguiente_mes = mes_fecha.replace(month=mes_fecha.month + 1, day=1)
+            fin_mes = siguiente_mes - timedelta(days=1)
+
+        citas_mes = get_citas(inicio_mes.date(), fin_mes.date())
+        gastos_var_mes = get_gastos_variables(inicio_mes.date(), fin_mes.date())
+        gastos_fijos_df = get_gastos_fijos()
+
+        ingresos_mes = citas_mes['precio_cobrado'].sum() + citas_mes['propina'].sum() if len(citas_mes) > 0 else 0
+        gastos_var = gastos_var_mes['monto'].sum() if len(gastos_var_mes) > 0 else 0
+        gastos_fijos = gastos_fijos_df['monto'].sum() if len(gastos_fijos_df) > 0 else 0
+        gastos_mes = gastos_var + gastos_fijos
+
+        # Calcular costo de insumos de las citas
+        if len(citas_mes) > 0:
+            servicios_df = get_servicios()
+            if len(servicios_df) > 0:
+                citas_con_costo = citas_mes.merge(
+                    servicios_df[['id', 'costo_insumos']],
+                    left_on='servicio_id',
+                    right_on='id',
+                    how='left'
+                )
+                costo_insumos = citas_con_costo['costo_insumos'].sum()
+                gastos_mes += costo_insumos
+
+        beneficio_mes = ingresos_mes - gastos_mes
+
+        meses_datos.append({
+            'mes': mes_fecha.strftime('%b'),
+            'mes_num': mes_fecha.month,
+            'ingresos': float(ingresos_mes),
+            'gastos': float(gastos_mes),
+            'beneficio': float(beneficio_mes)
+        })
+
+    # Datos del mes actual
+    inicio_mes_actual = hoy.replace(day=1)
+    if hoy.month == 12:
+        fin_mes_actual = hoy.replace(day=31)
+    else:
+        siguiente_mes = hoy.replace(month=hoy.month + 1, day=1)
+        fin_mes_actual = siguiente_mes - timedelta(days=1)
+
+    citas_actual = get_citas(inicio_mes_actual.date(), fin_mes_actual.date())
+    gastos_var_actual = get_gastos_variables(inicio_mes_actual.date(), fin_mes_actual.date())
+    gastos_fijos_df = get_gastos_fijos()
+
+    ingresos_actual = citas_actual['precio_cobrado'].sum() + citas_actual['propina'].sum() if len(citas_actual) > 0 else 0
+    gastos_var_actual_total = gastos_var_actual['monto'].sum() if len(gastos_var_actual) > 0 else 0
+    gastos_fijos_total = gastos_fijos_df['monto'].sum() if len(gastos_fijos_df) > 0 else 0
+    gastos_actual = gastos_var_actual_total + gastos_fijos_total
+
+    if len(citas_actual) > 0:
+        servicios_df = get_servicios()
+        if len(servicios_df) > 0:
+            citas_con_costo = citas_actual.merge(
+                servicios_df[['id', 'costo_insumos']],
+                left_on='servicio_id',
+                right_on='id',
+                how='left'
+            )
+            gastos_actual += citas_con_costo['costo_insumos'].sum()
+
+    beneficio_actual = ingresos_actual - gastos_actual
+
+    # Calcular proyecciones basadas en tendencia
+    if len(meses_datos) >= 2:
+        tendencia_ingresos = (meses_datos[-1]['ingresos'] - meses_datos[0]['ingresos']) / len(meses_datos)
+        ingresos_proyectados = float(ingresos_actual) + tendencia_ingresos * 0.5
+    else:
+        ingresos_proyectados = float(ingresos_actual) * 1.05
+
+    gastos_proyectados = float(gastos_actual)
+    beneficio_proyectado = ingresos_proyectados - gastos_proyectados
+    margen = (beneficio_proyectado / ingresos_proyectados * 100) if ingresos_proyectados > 0 else 0
+
+    # Calcular variación vs mes anterior
+    if len(meses_datos) > 0:
+        ultimo_mes = meses_datos[-1]
+        var_ingresos = ((ingresos_proyectados - ultimo_mes['ingresos']) / ultimo_mes['ingresos'] * 100) if ultimo_mes['ingresos'] > 0 else 0
+        var_gastos = ((gastos_proyectados - ultimo_mes['gastos']) / ultimo_mes['gastos'] * 100) if ultimo_mes['gastos'] > 0 else 0
+        margen_anterior = (ultimo_mes['beneficio'] / ultimo_mes['ingresos'] * 100) if ultimo_mes['ingresos'] > 0 else 0
+        var_margen = margen - margen_anterior
+    else:
+        var_ingresos = 0
+        var_gastos = 0
+        var_margen = 0
+
+    # ===== TARJETAS DE MÉTRICAS =====
+    st.markdown(f"""
+    <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 100px; background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%); border-radius: 16px; padding: 16px; text-align: center;">
+            <p style="font-size: 0.7rem; color: #2E7D32; font-weight: 600; margin: 0 0 8px 0; text-transform: uppercase;">Ingresos Proyectados</p>
+            <p style="font-size: 1.5rem; font-weight: 700; color: #1B5E20; margin: 0;">€{ingresos_proyectados:,.0f}</p>
+            <p style="font-size: 0.7rem; color: {'#2E7D32' if var_ingresos >= 0 else '#C62828'}; margin: 4px 0 0 0;">
+                {'↑' if var_ingresos >= 0 else '↓'} vs mes ant: {var_ingresos:+.1f}%
+            </p>
+        </div>
+        <div style="flex: 1; min-width: 100px; background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%); border-radius: 16px; padding: 16px; text-align: center;">
+            <p style="font-size: 0.7rem; color: #C62828; font-weight: 600; margin: 0 0 8px 0; text-transform: uppercase;">Gastos Estimados</p>
+            <p style="font-size: 1.5rem; font-weight: 700; color: #B71C1C; margin: 0;">€{gastos_proyectados:,.0f}</p>
+            <p style="font-size: 0.7rem; color: {'#C62828' if var_gastos > 0 else '#2E7D32'}; margin: 4px 0 0 0;">
+                {'↑' if var_gastos >= 0 else '↓'} vs mes ant: {var_gastos:+.1f}%
+            </p>
+        </div>
+        <div style="flex: 1; min-width: 100px; background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); border-radius: 16px; padding: 16px; text-align: center;">
+            <p style="font-size: 0.7rem; color: #1565C0; font-weight: 600; margin: 0 0 8px 0; text-transform: uppercase;">Margen Beneficio</p>
+            <p style="font-size: 1.5rem; font-weight: 700; color: #0D47A1; margin: 0;">{margen:.1f}%</p>
+            <p style="font-size: 0.7rem; color: {'#2E7D32' if var_margen >= 0 else '#C62828'}; margin: 4px 0 0 0;">
+                {'↑' if var_margen >= 0 else '↓'} vs mes ant: {var_margen:+.1f}%
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ===== GRÁFICO DE TENDENCIAS =====
+    st.markdown('<h3 class="section-title" style="margin-top: 24px;">📊 Tendencias Mensuales</h3>', unsafe_allow_html=True)
+
+    # Preparar datos para el gráfico
+    meses_nombres = [m['mes'] for m in meses_datos] + [hoy.strftime('%b')]
+    ingresos_lista = [m['ingresos'] for m in meses_datos] + [float(ingresos_actual)]
+    gastos_lista = [m['gastos'] for m in meses_datos] + [float(gastos_actual)]
+    beneficio_lista = [m['beneficio'] for m in meses_datos] + [float(beneficio_actual)]
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=meses_nombres,
+        y=ingresos_lista,
+        name='Ingresos',
+        line=dict(color='#4CAF50', width=3),
+        mode='lines+markers',
+        marker=dict(size=8)
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=meses_nombres,
+        y=gastos_lista,
+        name='Gastos',
+        line=dict(color='#FF9800', width=3),
+        mode='lines+markers',
+        marker=dict(size=8)
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=meses_nombres,
+        y=beneficio_lista,
+        name='Beneficio',
+        line=dict(color='#2196F3', width=3),
+        mode='lines+markers',
+        marker=dict(size=8)
+    ))
+
+    fig.update_layout(
+        height=280,
+        margin=dict(l=0, r=0, t=10, b=0),
+        xaxis=dict(showgrid=False),
+        yaxis=dict(showgrid=True, gridcolor='#F2F2F7', tickprefix='€'),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.25,
+            xanchor="center",
+            x=0.5
+        ),
+        font=dict(size=12)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ===== ANÁLISIS WHAT-IF =====
+    st.markdown('<h3 class="section-title" style="margin-top: 24px;">🎯 Análisis de Escenarios</h3>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="background: white; border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);">
+        <p style="color: #8E8E93; font-size: 0.85rem; margin: 0 0 16px 0;">
+            Ajusta los parámetros para ver el impacto en tus proyecciones
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        crecimiento_clientes = st.slider(
+            "📈 Crecimiento Clientes %",
+            min_value=0,
+            max_value=30,
+            value=10,
+            step=5,
+            key="slider_crecimiento"
+        )
+
+    with col2:
+        aumento_precios = st.slider(
+            "💰 Aumento Precios %",
+            min_value=0,
+            max_value=20,
+            value=5,
+            step=1,
+            key="slider_precios"
+        )
+
+    # Calcular proyección con escenario
+    factor_crecimiento = 1 + (crecimiento_clientes / 100)
+    factor_precios = 1 + (aumento_precios / 100)
+
+    ingresos_escenario = ingresos_proyectados * factor_crecimiento * factor_precios
+    # Los gastos aumentan proporcionalmente al crecimiento de clientes (más insumos)
+    gastos_escenario = gastos_proyectados * (1 + (crecimiento_clientes / 100) * 0.3)
+    beneficio_escenario = ingresos_escenario - gastos_escenario
+    margen_escenario = (beneficio_escenario / ingresos_escenario * 100) if ingresos_escenario > 0 else 0
+
+    # Mostrar resultados del escenario
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%); border-radius: 16px; padding: 20px; margin-top: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div>
+                <p style="font-size: 0.75rem; color: #2E7D32; font-weight: 600; margin: 0; text-transform: uppercase;">Beneficio Proyectado</p>
+                <p style="font-size: 1.8rem; font-weight: 700; color: #1B5E20; margin: 4px 0 0 0;">
+                    €{beneficio_escenario:,.0f} <span style="font-size: 1rem;">{'↑' if beneficio_escenario > beneficio_proyectado else '↓'}</span>
+                </p>
+            </div>
+            <div style="text-align: right;">
+                <p style="font-size: 0.75rem; color: #2E7D32; font-weight: 600; margin: 0; text-transform: uppercase;">Margen</p>
+                <p style="font-size: 1.5rem; font-weight: 700; color: #1B5E20; margin: 4px 0 0 0;">{margen_escenario:.1f}%</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Desglose del escenario
+    with st.expander("📋 Ver desglose del escenario"):
+        st.markdown(f"""
+        | Concepto | Valor Base | Con Escenario | Diferencia |
+        |----------|------------|---------------|------------|
+        | **Ingresos** | €{ingresos_proyectados:,.0f} | €{ingresos_escenario:,.0f} | €{ingresos_escenario - ingresos_proyectados:+,.0f} |
+        | **Gastos** | €{gastos_proyectados:,.0f} | €{gastos_escenario:,.0f} | €{gastos_escenario - gastos_proyectados:+,.0f} |
+        | **Beneficio** | €{beneficio_proyectado:,.0f} | €{beneficio_escenario:,.0f} | €{beneficio_escenario - beneficio_proyectado:+,.0f} |
+        | **Margen** | {margen:.1f}% | {margen_escenario:.1f}% | {margen_escenario - margen:+.1f}% |
+        """)
+
 # ---------- CONFIGURACIÓN ----------
 elif pagina == 'config':
     st.markdown('<h2 class="section-title">⚙️ Configuración</h2>', unsafe_allow_html=True)
@@ -1862,40 +2117,53 @@ elif pagina == 'config':
 # NAVEGACIÓN INFERIOR CON BOTONES
 # ============================================
 
-# Solo mostrar navegación en páginas principales (no en registrar/gastos que tienen formularios)
-if pagina not in ['registrar', 'gastos']:
+# Solo mostrar navegación en páginas principales (no en registrar que tiene formulario largo)
+if pagina not in ['registrar']:
     st.markdown("---")
-    
-    # Crear columnas para los botones de navegación
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
+
+    # Primera fila de navegación
+    col1, col2, col3, col4 = st.columns(4)
+
     with col1:
         if st.button("📊\nDashboard", key="nav_dashboard", use_container_width=True):
             st.session_state.pagina = 'dashboard'
             st.rerun()
-    
+
     with col2:
         if st.button("📅\nAgenda", key="nav_agenda", use_container_width=True):
             st.session_state.pagina = 'agenda'
             st.rerun()
-    
+
     with col3:
         badge = f" ({pendientes})" if pendientes > 0 else ""
         if st.button(f"📋\nSolicitudes{badge}", key="nav_solicitudes", use_container_width=True):
             st.session_state.pagina = 'solicitudes'
             st.rerun()
-    
+
     with col4:
+        if st.button("📈\nProyecciones", key="nav_proyecciones", use_container_width=True):
+            st.session_state.pagina = 'proyecciones'
+            st.rerun()
+
+    # Segunda fila de navegación
+    col5, col6, col7, col8 = st.columns(4)
+
+    with col5:
         if st.button("👥\nClientes", key="nav_clientes", use_container_width=True):
             st.session_state.pagina = 'clientes'
             st.rerun()
-    
-    with col5:
+
+    with col6:
         if st.button("💅\nServicios", key="nav_servicios", use_container_width=True):
             st.session_state.pagina = 'servicios'
             st.rerun()
-    
-    with col6:
+
+    with col7:
+        if st.button("💰\nGastos", key="nav_gastos", use_container_width=True):
+            st.session_state.pagina = 'gastos'
+            st.rerun()
+
+    with col8:
         if st.button("⚙️\nConfig", key="nav_config", use_container_width=True):
             st.session_state.pagina = 'config'
             st.rerun()
