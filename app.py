@@ -1337,10 +1337,13 @@ elif pagina == 'registrar':
     if len(servicios) == 0:
         st.warning("⚠️ Primero crea al menos un servicio")
     else:
+        # Cliente selection OUTSIDE form to allow dynamic re-rendering
+        tipo_cliente = st.radio("👤 Cliente", ["Existente", "Nuevo"], horizontal=True, key="tipo_cliente_radio")
+
         with st.form("form_cita"):
             fecha_cita = st.date_input("📅 Fecha", datetime.now())
             hora_cita = st.time_input("🕐 Hora", datetime.now().time())
-            
+
             # Servicio
             servicio_opciones = servicios[['id', 'nombre', 'precio', 'categoria_nombre']].copy()
             servicio_opciones['display'] = servicio_opciones.apply(
@@ -1348,30 +1351,28 @@ elif pagina == 'registrar':
             )
             servicio_sel = st.selectbox("💅 Servicio", options=servicio_opciones['id'].tolist(),
                 format_func=lambda x: servicio_opciones[servicio_opciones['id']==x]['display'].values[0])
-            
+
             precio_servicio = servicios[servicios['id']==servicio_sel]['precio'].values[0]
             precio_cobrado = st.number_input("💶 Precio (€)", value=float(precio_servicio), min_value=0.0)
-            
-            # Cliente
-            tipo_cliente = st.radio("👤 Cliente", ["Existente", "Nuevo"], horizontal=True)
-            
+
+            # Cliente - show appropriate fields based on selection
             if tipo_cliente == "Existente" and len(clientes) > 0:
-                cliente_sel = st.selectbox("Seleccionar", options=clientes['id'].tolist(),
+                cliente_sel = st.selectbox("Seleccionar cliente", options=clientes['id'].tolist(),
                     format_func=lambda x: clientes[clientes['id']==x]['nombre'].values[0])
                 nuevo_nombre = nuevo_tel = nuevo_email = None
             else:
                 cliente_sel = None
-                nuevo_nombre = st.text_input("Nombre")
+                nuevo_nombre = st.text_input("Nombre del cliente")
                 nuevo_tel = st.text_input("Teléfono")
                 nuevo_email = st.text_input("Email")
-            
+
             canal = st.selectbox("📱 Canal", ["Booksy", "WhatsApp", "Walk-in", "Instagram", "Web", "Referido"])
             metodo_pago = st.selectbox("💳 Pago", ["Efectivo", "Tarjeta", "Bizum"])
             propina = st.number_input("💝 Propina (€)", value=0.0, min_value=0.0)
             notas = st.text_area("📝 Notas")
-            
+
             submitted = st.form_submit_button("✅ Registrar Cita", use_container_width=True, type="primary")
-            
+
             if submitted:
                 if tipo_cliente == "Nuevo":
                     if not nuevo_nombre:
@@ -1379,9 +1380,9 @@ elif pagina == 'registrar':
                     else:
                         cliente_sel = insertar_cliente(nuevo_nombre, nuevo_tel, nuevo_email, canal, "")
                         st.success(f"✅ Cliente '{nuevo_nombre}' creado")
-                
+
                 if cliente_sel:
-                    insertar_cita(fecha_cita, hora_cita, cliente_sel, servicio_sel, 
+                    insertar_cita(fecha_cita, hora_cita, cliente_sel, servicio_sel,
                                 precio_cobrado, propina, canal, metodo_pago, notas)
                     st.success("✅ ¡Cita registrada!")
                     st.balloons()
