@@ -8,6 +8,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import pandas as pd
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # ============================================
 # CONFIGURACIÓN DE LA PÁGINA
@@ -250,10 +253,92 @@ def insertar_solicitud(nombre, telefono, email, servicio, preferencia, mensaje):
     data = worksheet.get_all_records()
     new_id = max([row.get('id', 0) for row in data], default=0) + 1
     
-    row = [new_id, nombre, telefono, email, servicio, preferencia, mensaje, 'pendiente', 
+    row = [new_id, nombre, telefono, email, servicio, preferencia, mensaje, 'pendiente',
            datetime.now().isoformat(), '', '']
     worksheet.append_row(row)
     return new_id
+
+def enviar_notificacion_email(nombre, telefono, email, servicio, preferencia, mensaje):
+    """Enviar notificación por email cuando se recibe una nueva solicitud"""
+    try:
+        # Configuración del email desde secrets
+        email_sender = st.secrets.get("email", {}).get("sender", "beautyboxmlg@gmail.com")
+        email_password = st.secrets.get("email", {}).get("app_password", "")
+        email_recipient = st.secrets.get("email", {}).get("recipient", "beautyboxmlg@gmail.com")
+
+        if not email_password:
+            # Si no hay contraseña configurada, no enviar (silenciosamente)
+            return False
+
+        # Crear el mensaje
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'🔔 Nueva Solicitud de Cita - {nombre}'
+        msg['From'] = email_sender
+        msg['To'] = email_recipient
+
+        # Contenido del email en texto plano
+        text_content = f"""
+Nueva Solicitud de Cita - BeautyBox Málaga
+
+👤 Cliente: {nombre}
+📱 Teléfono: {telefono}
+📧 Email: {email if email else 'No proporcionado'}
+💅 Servicio: {servicio}
+🕐 Preferencia: {preferencia}
+💬 Mensaje: {mensaje if mensaje else 'Sin mensaje'}
+
+📅 Fecha de solicitud: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+Abre la app para confirmar o rechazar esta solicitud.
+        """
+
+        # Contenido del email en HTML
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; background-color: #FDF8F7; padding: 20px;">
+            <div style="max-width: 480px; margin: 0 auto; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h1 style="color: #c48b9f; margin: 0;">🔔 Nueva Solicitud</h1>
+                    <p style="color: #8E8E93; margin: 5px 0;">BeautyBox Málaga</p>
+                </div>
+
+                <div style="background: #F8F9FA; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <p style="margin: 8px 0;"><strong>👤 Cliente:</strong> {nombre}</p>
+                    <p style="margin: 8px 0;"><strong>📱 Teléfono:</strong> <a href="tel:{telefono}">{telefono}</a></p>
+                    <p style="margin: 8px 0;"><strong>📧 Email:</strong> {email if email else 'No proporcionado'}</p>
+                </div>
+
+                <div style="background: #F8F9FA; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <p style="margin: 8px 0;"><strong>💅 Servicio:</strong> {servicio}</p>
+                    <p style="margin: 8px 0;"><strong>🕐 Preferencia:</strong> {preferencia}</p>
+                    <p style="margin: 8px 0;"><strong>💬 Mensaje:</strong> {mensaje if mensaje else 'Sin mensaje'}</p>
+                </div>
+
+                <div style="text-align: center; padding: 16px; background: linear-gradient(135deg, #d4a5a5 0%, #c48b9f 100%); border-radius: 12px;">
+                    <p style="color: white; margin: 0; font-weight: 600;">📲 Abre la app para confirmar o rechazar</p>
+                </div>
+
+                <p style="text-align: center; color: #8E8E93; font-size: 12px; margin-top: 16px;">
+                    Solicitud recibida: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(text_content, 'plain'))
+        msg.attach(MIMEText(html_content, 'html'))
+
+        # Enviar el email
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(email_sender, email_password)
+            server.sendmail(email_sender, email_recipient, msg.as_string())
+
+        return True
+    except Exception as e:
+        # Log del error pero no mostrar al cliente
+        print(f"Error enviando email: {e}")
+        return False
 
 # ============================================
 # FORMULARIO
@@ -320,6 +405,8 @@ else:
                 st.error("Por favor completa los campos obligatorios (*)")
             else:
                 insertar_solicitud(nombre, telefono, email, servicio, preferencia, mensaje)
+                # Enviar notificación por email
+                enviar_notificacion_email(nombre, telefono, email, servicio, preferencia, mensaje)
                 st.session_state.solicitud_enviada = True
                 st.rerun()
 
