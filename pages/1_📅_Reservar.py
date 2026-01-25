@@ -413,10 +413,16 @@ else:
                 st.error("Por favor completa los campos obligatorios (*)")
             else:
                 insertar_solicitud(nombre, telefono, email, servicio, preferencia, mensaje)
+                st.success("✅ Solicitud guardada en base de datos")
                 # Enviar notificación por email
-                enviar_notificacion_email(nombre, telefono, email, servicio, preferencia, mensaje)
-                st.session_state.solicitud_enviada = True
-                st.rerun()
+                st.write("---")
+                st.write("**🔍 DEBUG - Intentando enviar email...**")
+                resultado_email = enviar_notificacion_email(nombre, telefono, email, servicio, preferencia, mensaje)
+                st.write(f"**Resultado:** {'✅ Éxito' if resultado_email else '❌ Falló'}")
+                st.write("---")
+                # TEMPORAL: Comentado para ver debug
+                # st.session_state.solicitud_enviada = True
+                # st.rerun()
 
 # Info de contacto
 st.markdown("""
