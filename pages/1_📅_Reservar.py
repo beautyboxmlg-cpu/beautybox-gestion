@@ -267,16 +267,19 @@ def enviar_notificacion_email(nombre, telefono, email, servicio, preferencia, me
             email_password = st.secrets["email"]["app_password"]
             email_recipient = st.secrets["email"]["recipient"]
         except KeyError as e:
-            print(f"Error: Falta configuración de email en secrets: {e}")
+            st.error(f"❌ DEBUG: Falta configuración de email: {e}")
             return False
 
         if not email_password:
-            print("Error: app_password está vacío")
+            st.error("❌ DEBUG: app_password está vacío")
             return False
+
+        # DEBUG: Mostrar que los secrets se leyeron bien
+        st.info(f"📧 DEBUG: Intentando enviar a {email_recipient}...")
 
         # Crear el mensaje
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = f'🔔 Nueva Solicitud de Cita - {nombre}'
+        msg['Subject'] = f'Nueva Solicitud de Cita - {nombre}'
         msg['From'] = email_sender
         msg['To'] = email_recipient
 
@@ -338,10 +341,11 @@ Abre la app para confirmar o rechazar esta solicitud.
             server.login(email_sender, email_password)
             server.sendmail(email_sender, email_recipient, msg.as_string())
 
+        st.success("✅ DEBUG: Email enviado correctamente!")
         return True
     except Exception as e:
-        # Log del error pero no mostrar al cliente
-        print(f"Error enviando email: {e}")
+        # Mostrar el error para debugging
+        st.error(f"❌ DEBUG Error enviando email: {e}")
         return False
 
 # ============================================
