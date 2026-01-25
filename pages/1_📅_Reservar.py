@@ -262,12 +262,16 @@ def enviar_notificacion_email(nombre, telefono, email, servicio, preferencia, me
     """Enviar notificación por email cuando se recibe una nueva solicitud"""
     try:
         # Configuración del email desde secrets
-        email_sender = st.secrets.get("email", {}).get("sender", "beautyboxmlg@gmail.com")
-        email_password = st.secrets.get("email", {}).get("app_password", "")
-        email_recipient = st.secrets.get("email", {}).get("recipient", "beautyboxmlg@gmail.com")
+        try:
+            email_sender = st.secrets["email"]["sender"]
+            email_password = st.secrets["email"]["app_password"]
+            email_recipient = st.secrets["email"]["recipient"]
+        except KeyError as e:
+            print(f"Error: Falta configuración de email en secrets: {e}")
+            return False
 
         if not email_password:
-            # Si no hay contraseña configurada, no enviar (silenciosamente)
+            print("Error: app_password está vacío")
             return False
 
         # Crear el mensaje
